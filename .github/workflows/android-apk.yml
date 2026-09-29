@@ -51,14 +51,17 @@ jobs:
           cd android
           chmod +x gradlew
           echo "sdk.dir=$ANDROID_HOME" > local.properties
-          ./gradlew assembleDebug --no-daemon
-          echo "=== APK outputs ==="
+          echo "Building with retry..."
+          for i in 1 2 3; do
+            echo "Attempt $i"
+            ./gradlew assembleDebug --no-daemon --stacktrace && break
+            echo "Failed attempt $i"
+            if [ $i -eq 3 ]; then exit 1; fi
+            sleep 10
+          done
           ls -lh app/build/outputs/apk/debug/ || true
-          find app/build -name "*.apk" -type f -exec ls -lh {} \; || echo "No APK in app/build"
           mkdir -p ../artifacts
-          find app/build -name "*.apk" -type f -exec cp -v {} ../artifacts/ \; || true
-          ls -lh ../artifacts/ || true
-          cp -v app/build/outputs/apk/debug/app-debug.apk ../artifacts/ 2>&1 || echo "Copy failed"
+          find app/build -name "*.apk" -exec cp -v {} ../artifacts/ \; || true
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4

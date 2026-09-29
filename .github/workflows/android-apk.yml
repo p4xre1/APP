@@ -32,6 +32,11 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
 
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.11.1
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -46,14 +51,11 @@ jobs:
           cd android
           chmod +x gradlew
           echo "sdk.dir=$ANDROID_HOME" > local.properties
-          ./gradlew assembleDebug --no-daemon --stacktrace
-          echo "=== APKs found ==="
-          find . -name "*.apk" -type f -exec ls -lh {} \; || echo "No APK found"
+          ./gradlew assembleDebug --no-daemon
           ls -lh app/build/outputs/apk/debug/ || true
-          ls -R app/build/outputs/ 2>&1 | head -n 100 || true
+          find . -name "*.apk" -type f -exec ls -lh {} \; || echo "No APK"
           mkdir -p ../artifacts
           find app/build -name "*.apk" -type f -exec cp -v {} ../artifacts/ \; || true
-          ls -lh ../artifacts/ || true
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4

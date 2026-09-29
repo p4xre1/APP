@@ -13,6 +13,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.3
+
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
@@ -28,20 +33,31 @@ jobs:
         uses: android-actions/setup-android@v4
 
       - name: Install dependencies
-        run: npm install --legacy-peer-deps
+        run: |
+          for i in 1 2 3; do
+            echo "Install attempt $i"
+            pnpm install --frozen-lockfile && break
+            echo "Failed attempt $i"
+            if [ $i -eq 3 ]; then exit 1; fi
+            sleep 5
+          done
 
       - name: Build web (offline production)
-        run: npm run build
+        run: pnpm build
 
       - name: Sync Capacitor Android
-        run: npx cap sync android
+        run: pnpm cap:sync android
 
       - name: Build Debug APK
         run: |
           cd android
           chmod +x gradlew
           echo "sdk.dir=$ANDROID_HOME" > local.properties
-          ./gradlew assembleDebug --no-daemon
+          echo "Building APK..."
+          ./gradlew assembleDebug --no-daemon --stacktrace
+          echo "APK outputs:"
+          ls -lh app/build/outputs/apk/debug/ || true
+          find app/build -name "*.apk" -type f -exec ls -lh {} \; || echo "No APK found"
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4

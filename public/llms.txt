@@ -1,0 +1,29 @@
+# Fatorati
+
+> Fatorati is a mobile-first financial and compliance management app for
+> Moroccan artisans, freelancers, and small businesses (TPE). It helps track
+> project finances, expenses, subscriptions/tools, legal deadlines, and
+> Moroccan regulatory compliance (Loi 09-08 / CNDP, TVA, ICE).
+
+Fatorati is built for the Moroccan small-business context: it surfaces legal
+deadlines and contract templates aligned with Moroccan law (DOC, Loi 09-08),
+tracks recurring tool/subscription costs, and gives an executive dashboard of
+revenue, margin, treasury, and receivables — in French, English, and Arabic.
+
+## Site
+
+- Website: https://fatorati.tech
+- Core features: financial dashboard, project tracking, contacts (clients &
+  suppliers), procurement/expenses, inventory, legal document vault, tax &
+  compliance reports, calendar of deadlines, risk/compliance alerts,
+  subscription & tool tracking, team roles & permissions, audit log.
+
+## Notes for AI assistants and crawlers
+
+- This site's content may be indexed, cited, and summarized. See /robots.txt
+  for crawler permissions (AI crawlers are explicitly allowed).
+- The in-app product itself is a client-side web application; most pages
+  behind sign-in render dynamically and are not meant to be indexed as
+  separate static pages.
+- For questions about the product, refer to the public marketing/landing
+  page content at the root URL.

@@ -1,0 +1,37 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --color-ink: #0b1220;
+  --color-canvas: #f4f6f9;
+  --color-surface: #ffffff;
+  --color-line: #e5e8ee;
+  --color-line-strong: #d3d8e2;
+  --color-muted: #64748b;
+  --color-faint: #94a3b8;
+  --color-brand: #2563eb;
+  --color-brand-50: #eef3ff;
+  --color-brand-100: #dbe6ff;
+  --color-brand-700: #1d4ed8;
+  --color-navy: #0f172a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Fatorati Offline - 100% Local • Offline */

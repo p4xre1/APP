@@ -33,15 +33,17 @@ jobs:
         uses: android-actions/setup-android@v4
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          for i in 1 2 3; do
+            echo "Install attempt $i"
+            pnpm install --frozen-lockfile && break
+            echo "Failed attempt $i"
+            if [ $i -eq 3 ]; then exit 1; fi
+            sleep 5
+          done
 
       - name: Build web (offline production)
-        run: |
-          echo "Building web..."
-          pnpm build 2>&1 | tee build.log
-          echo "Exit: ${PIPESTATUS[0]}"
-          cat build.log | tail -n 100
-          ls -lh dist/ || echo "No dist"
+        run: pnpm build
 
       - name: Sync Capacitor Android
         run: pnpm cap:sync android
@@ -51,18 +53,7 @@ jobs:
           cd android
           chmod +x gradlew
           echo "sdk.dir=$ANDROID_HOME" > local.properties
-          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee ../gradle.log
-          find . -name "*.apk" -type f -exec ls -lh {} \; || echo "No APK"
-
-      - name: Upload logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs
-          path: |
-            build.log
-            gradle.log
-          retention-days: 7
+          ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4

@@ -1,11 +1,12 @@
 import { Shield } from 'lucide-react'
-import { askConfirm } from '../lib/dialogs'
 import { t } from '../i18n'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { App as NativeApp } from '@capacitor/app'
-import { normalizePin, createOrChangePin, unlockPin, unlockBiometric, lockVault, isUnlocked, subscribeLock, readMeta, resetApp } from '../lib/vault'
+import { normalizePin, createOrChangePin, unlockPin, unlockBiometric, lockVault, isUnlocked, subscribeLock, readMeta } from '../lib/vault'
+import { PASSCODE_MIN, PASSCODE_MAX, PIN_MAX } from '../lib/secret'
+import ResetFlow from './ResetFlow'
 import { applyImportedPreferences } from '../lib/db'
 import { usePreferences, useI18n, errorText } from '../i18n'
 import { number } from '../lib/format'
@@ -16,6 +17,7 @@ export default function SecurityGate({ children }: {children:ReactNode}) {
   const {t}=useI18n(),prefs=usePreferences(),unlocked=useSyncExternalStore(subscribeLock,isUnlocked)
   const [configured,setConfigured]=useState<boolean|null>(null),[biometric,setBiometric]=useState(false)
   const [pin,setPin]=useState(''),[repeat,setRepeat]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('')
+  const [passcode,setPasscode]=useState(false)
   const [blocked,setBlocked]=useState(0),[clock,setClock]=useState(Date.now()),[ready,setReady]=useState(false)
   const refresh=async()=>{const meta=await readMeta();setConfigured(!!meta.salt);setBiometric(meta.biometric);setBlocked(meta.blockedUntil)}
   useEffect(()=>{void refresh().catch(e=>setError(errorText(e)))},[unlocked])
@@ -49,12 +51,10 @@ export default function SecurityGate({ children }: {children:ReactNode}) {
     }catch(e){setError(errorText(e));await refresh()}
     finally{setBusy(false)}
   }
-  async function reset(){
-    if(!await askConfirm(t('Reset warning')))return
-    if(!await askConfirm(t('Confirm permanent reset')))return
-    setBusy(true)
-    try{await resetApp();window.location.reload()}catch(e){setError(errorText(e));setBusy(false)}
-  }
+  // Unlocking must accept whatever the owner chose at setup, PIN or passcode.
+  const digitsOnly=configured===false&&!passcode
+  const clean=(value:string)=>digitsOnly?normalizePin(value).replace(/[^0-9]/g,''):value.replace(/[^A-Za-z0-9]/g,'')
+  const secretLabel=configured===false?(passcode?t('Passcode'):t('6 to 12 digit PIN')):t('PIN or passcode')
   if(unlocked&&ready)return <>{children}</>
   return <div className="min-h-screen bg-canvas flex items-center justify-center p-4">
     <div className="bg-surface rounded-xl border border-line p-5 max-w-md w-full shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
@@ -63,14 +63,19 @@ export default function SecurityGate({ children }: {children:ReactNode}) {
       <LanguagePicker />
       {!configured&&<p className="text-[13px] text-warn">{t('PIN warning')}</p>}
       <form onSubmit={e=>{e.preventDefault();void submit()}} className="space-y-3.5">
-        <label className="block"><span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t('6-digit PIN')}</span><input autoFocus aria-label={t('6-digit PIN')} type="password" inputMode="numeric" autoComplete="off" maxLength={6} pattern="[0-9]{6}" required value={pin} onChange={e=>setPin(normalizePin(e.target.value).replace(/[^0-9]/g,''))} className="w-full px-3 py-2 border border-line-strong rounded-lg text-[13.5px] bg-surface text-ink outline-none transition-colors placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-brand/15" /></label>
-        {configured===false&&<label className="block"><span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t('Confirm PIN')}</span><input type="password" inputMode="numeric" autoComplete="off" maxLength={6} required value={repeat} onChange={e=>setRepeat(normalizePin(e.target.value).replace(/[^0-9]/g,''))} className="w-full px-3 py-2 border border-line-strong rounded-lg text-[13.5px] bg-surface text-ink outline-none transition-colors placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-brand/15" /></label>}
+        {configured===false&&<div className="flex gap-2">
+          <button type="button" onClick={()=>{setPasscode(false);setPin('');setRepeat('')}} className={`px-3 py-1.5 rounded-lg text-[13px] font-medium border ${passcode?'border-line text-muted bg-surface':'border-brand/30 text-brand bg-brand-50'}`}>{t('Numeric PIN')}</button>
+          <button type="button" onClick={()=>{setPasscode(true);setPin('');setRepeat('')}} className={`px-3 py-1.5 rounded-lg text-[13px] font-medium border ${!passcode?'border-line text-muted bg-surface':'border-brand/30 text-brand bg-brand-50'}`}>{t('Passcode')}</button>
+        </div>}
+        <label className="block"><span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{secretLabel}</span><input autoFocus aria-label={secretLabel} type="password" inputMode={digitsOnly?'numeric':'text'} autoComplete="off" maxLength={digitsOnly?PIN_MAX:PASSCODE_MAX} required value={pin} onChange={e=>setPin(clean(e.target.value))} className="w-full px-3 py-2 border border-line-strong rounded-lg text-[13.5px] bg-surface text-ink outline-none transition-colors placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-brand/15" /></label>
+        {configured===false&&<p className="text-[12px] text-muted">{t('A PIN can be 6 to 12 digits. A passcode needs at least {min} letters or digits.', { min: PASSCODE_MIN })}</p>}
+        {configured===false&&<label className="block"><span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{passcode?t('Confirm passcode'):t('Confirm PIN')}</span><input type="password" inputMode={digitsOnly?'numeric':'text'} autoComplete="off" maxLength={digitsOnly?PIN_MAX:PASSCODE_MAX} required value={repeat} onChange={e=>setRepeat(clean(e.target.value))} className="w-full px-3 py-2 border border-line-strong rounded-lg text-[13.5px] bg-surface text-ink outline-none transition-colors placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-brand/15" /></label>}
         <button disabled={busy||configured===null||blocked>clock} className="w-full bg-brand hover:bg-brand-700 text-white px-3.5 py-2 rounded-lg text-[13px] font-semibold disabled:opacity-50 transition-all active:scale-[0.98] disabled:opacity-40 shadow-sm">{t(busy?t("Working..."):configured?t("Unlock"):t("Create PIN"))}</button>
       </form>
       {biometric&&<button disabled={busy||blocked>clock} onClick={()=>void submit(true)} className="w-full bg-canvas text-ink px-3.5 py-2 rounded-lg text-[13px] font-medium">{t('Use biometrics')}</button>}
       {blocked>clock&&<p role="status">{t('Wait seconds',{count:number(Math.ceil((blocked-clock)/1000))})}</p>}
       {error&&<p role="alert" className="text-serious text-[13px]">{t(error)}</p>}
-      <button disabled={busy} onClick={()=>void reset()} className="text-serious text-[13px]">{t('Reset app')}</button>
+      <ResetFlow mode="lock" />
       </div>
     </div>
   </div>

@@ -8,3 +8,8 @@
 - `src/i18n/{en,ar,fr,es,pt}.json`, `src/lib/invoice-pdf.ts`: translate new navigation/chart labels and use local reference fonts in PDFs; no emoji.
 - `tests/{visual-policy,chart-data}.test.ts`: source-only design/offline-font checks, chart arithmetic and Node-rendered SVG regression tests; no browser tests/screenshots.
 - `README.md`, `CHANGES.md`: record authoritative source, font provenance, adaptations, verification scope and this file list.
+- `src/lib/{secret,reset,cache,clipboard,export-crypto,export-warning}.ts`: PIN/passcode strength rules, monotonic 24-hour reset wait, Cache and clipboard clearing, `.fatorati-export` container and the one-time plaintext-export warning.
+- `src/lib/{vault,storage,schema,db,backup-format}.ts`: 6-12 digit PINs or 8+ character passcodes, stored PBKDF2 iteration count, persisted lockout counter, encrypted tombstones, backup format 3.0.0 and delete-aware merge counts.
+- `src/components/{ResetFlow,ExportProtect,ProtectedExportPanel,SecurityGate,SecurityPanel,ExportCsvButton,BackupPanel}.tsx`, `src/modules/{Settings,Invoices,Estimates}.tsx`: delayed locked reset, secret change, security status card, protected exports, per-document CSV for accountants and the deletion-sync warning.
+- `src/i18n/{en,ar,fr,es,pt}.json`: 60 new keys in all five languages, Arabic included.
+- `tests/sync-security.test.ts`: tombstone merge cases, secret strength, iteration upgrade, lockout persistence, reset timing and protected-export round-trip.

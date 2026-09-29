@@ -2,12 +2,12 @@ import { beforeEach, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { IDBFactory, IDBObjectStore } from 'fake-indexeddb'
 import { exportBackup, importBackup, loadBackupFile } from '../src/lib/db'
-import { STORES, validateBackup, encodeBackup, decodeBackup, PasswordRequiredError } from '../src/lib/backup-format'
+import { STORES, RECORD_STORES, validateBackup, encodeBackup, decodeBackup, PasswordRequiredError } from '../src/lib/backup-format'
 import { buildCsv, csvRows } from '../src/lib/csv'
 import { fixture } from './fixtures'
 import { createOrChangePin, lockVault } from '../src/lib/vault'
 
-beforeEach(async () => { lockVault(); globalThis.indexedDB = new IDBFactory(); await createOrChangePin('123456') })
+beforeEach(async () => { lockVault(); globalThis.indexedDB = new IDBFactory(); await createOrChangePin('482915') })
 
 async function snapshot() {
   const { exportedAt: _, ...data } = await exportBackup()
@@ -46,7 +46,9 @@ test('invalid version, missing store, duplicates, fields, timestamps, enums and 
   await importBackup(fixture(), 'replace')
   const before = await snapshot()
   const malformed = [
-    { ...fixture(), version: '3.0.0' },
+    { ...fixture(), version: '9.9.9' },
+    { ...fixture(), tombstones: [{ id: 'gone', store: 'nowhere', deletedAt: 1, createdAt: 1, updatedAt: 1 }] },
+    { ...fixture(), tombstones: [{ id: 'gone', store: 'customers', deletedAt: 'soon', createdAt: 1, updatedAt: 1 }] },
     { ...fixture(), customers: undefined },
     { ...fixture(), exportedAt: 'not a date' },
     { ...fixture(), products: [fixture().products[0], fixture().products[0]] },
@@ -67,29 +69,29 @@ test('replace clears every store; empty arrays also replace existing records', a
   await importBackup(fixture(), 'replace')
   const incoming = fixture()
   for (const name of STORES) incoming[name] = []
-  assert.deepEqual(await importBackup(incoming, 'replace'), { added: 0, updated: 0, skipped: 0 })
+  assert.deepEqual(await importBackup(incoming, 'replace'), { added: 0, updated: 0, deleted: 0, skipped: 0 })
   for (const name of STORES) assert.deepEqual((await exportBackup())[name], [])
 })
 
 test('merge adds, updates, skips older/tied IDs in ALL stores, preserving local-only records and timestamps', async () => {
   const local = fixture()
-  for (const name of STORES) {
+  for (const name of RECORD_STORES) {
     // Same shape, distinct IDs. Invoice/estimate numbers intentionally collide.
     const rows = local[name] as { id: string; updatedAt: number }[]
     rows.push({ ...rows[0], id: `${name}-local-only` })
   }
   await importBackup(local, 'replace')
   const incoming = fixture()
-  for (const name of STORES) {
+  for (const name of RECORD_STORES) {
     incoming[name][0].updatedAt = 400
     const rows = incoming[name] as { id: string; updatedAt: number }[]
     rows.push({ ...rows[0], id: `${name}-new` })
   }
-  assert.deepEqual(await importBackup(incoming, 'merge'), { added: 8, updated: 8, skipped: 0 })
-  assert.deepEqual(await importBackup(incoming, 'merge'), { added: 0, updated: 0, skipped: 16 })
-  assert.deepEqual(await importBackup(fixture(), 'merge'), { added: 0, updated: 0, skipped: 8 })
+  assert.deepEqual(await importBackup(incoming, 'merge'), { added: 8, updated: 8, deleted: 0, skipped: 0 })
+  assert.deepEqual(await importBackup(incoming, 'merge'), { added: 0, updated: 0, deleted: 0, skipped: 16 })
+  assert.deepEqual(await importBackup(fixture(), 'merge'), { added: 0, updated: 0, deleted: 0, skipped: 8 })
   const result = await exportBackup()
-  for (const name of STORES) {
+  for (const name of RECORD_STORES) {
     assert.equal(result[name].length, 3)
     assert.equal(result[name].find(item => item.id === `${name}-local-only`)?.updatedAt, 200)
     assert.equal(result[name].find(item => item.id === incoming[name][0].id)?.updatedAt, 400)
@@ -102,17 +104,18 @@ for (const mode of ['replace', 'merge'] as const) {
     await importBackup(fixture(), 'replace')
     const before = await snapshot()
     const incoming = fixture()
-    for (const name of STORES) incoming[name][0].updatedAt = 500
+    for (const name of RECORD_STORES) incoming[name][0].updatedAt = 500
+    incoming.tombstones = [{ id: 'gone', store: 'customers', deletedAt: 500, createdAt: 500, updatedAt: 500 }]
     // Inject a real asynchronous constraint failure in the last store.
-    // put behaves like add for this test only, violating settings' primary key.
+    // put behaves like add for this test only, violating tombstones' primary key.
     const original = IDBObjectStore.prototype.put
     const originalAdd = IDBObjectStore.prototype.add
     IDBObjectStore.prototype.put = function (...args) {
-      return this.name === 'settings' ? originalAdd.apply(this, args) : original.apply(this, args)
+      return this.name === 'tombstones' ? originalAdd.apply(this, args) : original.apply(this, args)
     }
     IDBObjectStore.prototype.add = function (...args) {
       const request = originalAdd.apply(this, args)
-      if (this.name === 'settings') originalAdd.apply(this, args)
+      if (this.name === 'tombstones') originalAdd.apply(this, args)
       return request
     }
     try { await assert.rejects(importBackup(incoming, mode), /no data was changed/) }
@@ -124,6 +127,7 @@ for (const mode of ['replace', 'merge'] as const) {
 test('version 1 DB migrates without data loss, allowing same invoice number with different IDs', async () => {
   lockVault(); globalThis.indexedDB = new IDBFactory()
   const source = fixture()
+  source.tombstones = []
   await new Promise<void>((resolve, reject) => {
     const request = indexedDB.open('fatorati-offline-v1', 1)
     request.onupgradeneeded = () => {
@@ -137,7 +141,7 @@ test('version 1 DB migrates without data loss, allowing same invoice number with
     request.onsuccess = () => { request.result.close(); resolve() }
     request.onerror = () => reject(request.error)
   })
-  await createOrChangePin('123456')
+  await createOrChangePin('482915')
   assert.deepEqual((await exportBackup()).customers, source.customers)
   source.invoices[0].id = 'other-phone-invoice'
   const result = await importBackup(source, 'merge')

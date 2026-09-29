@@ -1,4 +1,4 @@
-import { Plus, Share2 } from 'lucide-react'
+import { Plus, Share2, FileSpreadsheet } from 'lucide-react'
 import { showAlert } from '../lib/dialogs'
 import { useState } from 'react'
 import { useFatorati } from '../store/useFatorati'
@@ -6,11 +6,16 @@ import { money, number, roundMoney, formatDate } from '../lib/format'
 import { generateEstimateNumber } from '../lib/fatorati'
 import { getPreferences } from '../lib/preferences'
 import { shareInvoicePdf } from '../lib/invoice-pdf'
+import { exportDocumentCsv } from '../lib/csv'
+import { EXPORT_CANCELED } from '../lib/export-warning'
+import ExportProtect from '../components/ExportProtect'
+import ExportCsvButton from '../components/ExportCsvButton'
 import { useI18n, errorText } from '../i18n'
 import DocumentOptions from '../components/DocumentOptions'
 export default function Estimates(){
   const {t}=useI18n(),{estimates,customers,business,addEstimate,updateEstimate}=useFatorati()
   const [showAdd,setShowAdd]=useState(false),[busy,setBusy]=useState(false)
+  const [protect,setProtect]=useState({enabled:false,password:''})
   const [form,setForm]=useState({customerId:'',description:'',quantity:1,unitPrice:0,notes:'',currency:getPreferences().defaultCurrency,language:getPreferences().language,pdfColor:getPreferences().pdfColor,exchangeRate:undefined as number|undefined,rateCurrency:undefined as string|undefined})
   const save=async()=>{
     if(!form.customerId||!form.description.trim())return
@@ -22,6 +27,10 @@ export default function Estimates(){
     }catch(e){showAlert(errorText(e))}finally{setBusy(false)}
   }
   return <div className="space-y-6">
+    <div className="flex flex-wrap items-end gap-6">
+      <ExportCsvButton store="estimates" />
+      <ExportProtect value={protect} onChange={patch=>setProtect(current=>({...current,...patch}))} label={t('Protect PDF with password')} />
+    </div>
     <div className="flex items-center justify-between">
       <div>
         <h1 className="text-[20px] font-bold tracking-tight text-ink">{t('Estimates')}</h1>
@@ -70,7 +79,10 @@ export default function Estimates(){
             <div className="space-y-4 mt-4">
               <p className="text-[12px] text-muted">{formatDate(est.occurredAt||est.createdAt,true,est.language)}</p>
               <DocumentOptions value={est} onChange={patch=>void updateEstimate(est.id,patch).catch(e=>showAlert(errorText(e)))}/>
-              <button disabled={busy} onClick={async()=>{setBusy(true);try{await shareInvoicePdf(est,business,customers.find(c=>c.id===est.customerId),est.currency)}catch(e){showAlert(errorText(e))}finally{setBusy(false)}}} className="text-brand text-[13px] flex items-center gap-2"><Share2 className="w-4 h-4" />{t('Share PDF')}</button>
+              <div className="flex flex-wrap gap-4">
+              <button disabled={busy} onClick={async()=>{setBusy(true);try{await shareInvoicePdf(est,business,customers.find(c=>c.id===est.customerId),est.currency,protect.enabled?protect.password:undefined)}catch(e){if((e as Error)?.message!==EXPORT_CANCELED)showAlert(errorText(e))}finally{setBusy(false)}}} className="text-brand text-[13px] flex items-center gap-2"><Share2 className="w-4 h-4" />{t('Share PDF')}</button>
+              <button disabled={busy} onClick={async()=>{setBusy(true);try{await exportDocumentCsv('estimates',est.id,est.language||getPreferences().language,protect.enabled?protect.password:undefined)}catch(e){if((e as Error)?.message!==EXPORT_CANCELED)showAlert(errorText(e))}finally{setBusy(false)}}} className="text-brand text-[13px] flex items-center gap-2"><FileSpreadsheet className="w-4 h-4" />{t('Export estimate data as CSV')}</button>
+              </div>
             </div>
           </details>
         </div>)}

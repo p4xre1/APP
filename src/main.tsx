@@ -5,6 +5,7 @@ import App from './App'
 import './index.css'
 import { I18nProvider, t } from './i18n'
 import { loadPreferences } from './lib/preferences'
+import { clearExportCache } from './lib/cache'
 import SecurityGate from './components/SecurityGate'
 import { SplashScreen } from '@capacitor/splash-screen'
 import { Capacitor } from '@capacitor/core'
@@ -60,6 +61,8 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
 
 async function start() {
   try {
+    // Exports left in Cache from a previous run are plaintext; drop them at start.
+    await clearExportCache()
     await loadPreferences()
     ReactDOM.createRoot(container).render(<ErrorBoundary>{app}</ErrorBoundary>)
   } catch {

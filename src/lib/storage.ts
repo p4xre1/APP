@@ -1,10 +1,18 @@
 import { STORES, type StoreName } from './schema'
 import type { DisplayPreferences } from './preferences'
+/** Pending "reset app" request made from the lock screen. */
+export interface ResetRequest { requestedAt: number; monotonicAt: number }
 export interface CipherRecord { id: string; encrypted: 1; iv: string; ciphertext: string }
 export interface PlainRecord { id: string; createdAt: number; updatedAt: number; [field: string]: unknown }
 export interface VaultMeta {
   id: 'security'; revision: number; salt?: string; verifier?: string; keyId?: string
   failures: number; blockedUntil: number; biometric: boolean
+  /** PBKDF2 cost of the stored verifier; raised in place when the target grows. */
+  iterations?: number
+  secretKind?: 'pin' | 'passcode'
+  /** Highest wall clock ever observed; stops a rewound phone clock from skipping waits. */
+  clockFloor?: number
+  resetRequest?: ResetRequest
   pendingPreferences?: DisplayPreferences
 }
 export interface Snapshot { meta: VaultMeta; stores: Record<StoreName, (CipherRecord | PlainRecord)[]> }
@@ -12,7 +20,7 @@ export const emptyMeta = (): VaultMeta => ({ id:'security', revision:0, failures
 export async function openStorage(): Promise<IDBDatabase> {
   return new Promise((resolve,reject) => {
     let blocked = false
-    const request = indexedDB.open('fatorati-offline-v1', 3)
+    const request = indexedDB.open('fatorati-offline-v1', 4)
     request.onerror = () => reject(new Error('Storage unavailable'))
     request.onblocked = () => { blocked = true; reject(new Error('Close other app windows')) }
     request.onupgradeneeded = () => {

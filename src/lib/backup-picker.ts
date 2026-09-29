@@ -19,6 +19,19 @@ export function chooseBackupFile(mode:ImportMode){
   document.body.appendChild(input);input.click()
 }
 
+/** Same handoff rules as backups: Android's chooser can unmount React. */
+let pickedExport:File|null=null
+export const takePickedExport=()=>{const file=pickedExport;pickedExport=null;return file}
+export const subscribePickedExport=subscribePickedBackup
+export function chooseExportFile(){
+  const input=document.createElement('input')
+  input.type='file';input.accept='.fatorati-export,application/json';input.hidden=true
+  const cleanup=()=>input.remove()
+  input.addEventListener('change',()=>{pickedExport=input.files?.[0]||null;listeners.forEach(fn=>fn());cleanup()},{once:true})
+  input.addEventListener('cancel',cleanup,{once:true})
+  document.body.appendChild(input);input.click()
+}
+
 let pickedLogo:File|null=null
 export const takePickedLogo=()=>{const file=pickedLogo;pickedLogo=null;return file}
 export const subscribePickedLogo=subscribePickedBackup

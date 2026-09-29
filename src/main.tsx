@@ -1,14 +1,20 @@
+import { DialogHost } from './lib/dialogs'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import './index.css'
+import { I18nProvider, t } from './i18n'
+import { loadPreferences } from './lib/preferences'
+import SecurityGate from './components/SecurityGate'
+import { SplashScreen } from '@capacitor/splash-screen'
+import { Capacitor } from '@capacitor/core'
 
 // Fatorati Offline - 100% Local • Offline
 // Simple business management. No subscription. Works offline.
 
 const app = (
   <React.StrictMode>
-    <App />
+    <I18nProvider><DialogHost /><SecurityGate><App /></SecurityGate></I18nProvider>
   </React.StrictMode>
 )
 
@@ -27,29 +33,22 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('Fatorati Error:', error, errorInfo)
-    // Clear potentially corrupted storage
-    try {
-      localStorage.removeItem('fatorati-offline-v1')
-    } catch {}
   }
 
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-gray-200 p-8 max-w-md w-full text-center">
-            <h1 className="text-xl font-bold text-gray-900 mb-2">Something went wrong</h1>
-            <p className="text-sm text-gray-600 mb-4">{this.state.error || 'An error occurred'}</p>
+        <div className="min-h-screen bg-canvas flex items-center justify-center p-4">
+          <div className="bg-surface rounded-xl border border-line p-8 max-w-md w-full text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+            <h1 className="text-xl font-bold text-ink mb-2">{t("Something went wrong")}</h1>
+            <p className="text-[13px] text-muted mb-4">{t("An error occurred")}</p>
             <button
               onClick={() => {
-                localStorage.clear()
                 window.location.reload()
               }}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium"
-            >
-              Clear data & Reload
-            </button>
-            <p className="text-xs text-gray-500 mt-4">Fatorati • 100% Local • Offline</p>
+              className="bg-brand text-white px-3.5 py-2 rounded-lg text-[13px] font-semibold transition-all active:scale-[0.98] disabled:opacity-40 shadow-sm"
+            >{t("Reload")}</button>
+            <p className="text-[12px] text-muted mt-4">{t("Fatorati • 100% Local • Offline")}</p>
           </div>
         </div>
       )
@@ -59,34 +58,15 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
   }
 }
 
-if (container.hasChildNodes()) {
-  ReactDOM.hydrateRoot(container, <ErrorBoundary>{app}</ErrorBoundary>)
-} else {
-  ReactDOM.createRoot(container).render(<ErrorBoundary>{app}</ErrorBoundary>)
-}
-
-// PWA update checker - offline first
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.ready.then((registration) => {
-      // Check for updates if internet available
-      if (navigator.onLine) {
-        registration.update().catch(() => {
-          // Fail silently - app works offline even if update server disappears
-        })
-      }
-    })
-  })
-}
-
-// Handle offline/online status
-window.addEventListener('online', () => {
-  console.log('Fatorati: Back online - checking for updates...')
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.ready.then((reg) => reg.update().catch(() => {}))
+async function start() {
+  try {
+    await loadPreferences()
+    ReactDOM.createRoot(container).render(<ErrorBoundary>{app}</ErrorBoundary>)
+  } catch {
+    // Fail closed; never mount business data if initialization fails.
+    container.textContent = t('Storage unavailable')
+  } finally {
+    if (Capacitor.isNativePlatform()) await SplashScreen.hide()
   }
-})
-
-window.addEventListener('offline', () => {
-  console.log('Fatorati: Offline mode - your data stays on device')
-})
+}
+void start()

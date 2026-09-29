@@ -1,173 +1,48 @@
-/**
- * Fatorati Offline - Dashboard
- * 100% Local • Offline - Simple business management
- */
-
+import { useMemo, useState } from 'react'
+import { TrendingUp, PiggyBank, ReceiptText, Landmark, FolderPlus, FileText, Users, Package } from 'lucide-react'
 import { useFatorati } from '../store/useFatorati'
-import { money } from '../lib/fatorati'
+import type { ModuleKey } from '../store/types'
+import { useI18n, usePreferences } from '../i18n'
+import { money, number, formatDate, locale } from '../lib/format'
+import { reportTotals } from '../lib/reports'
+import { chartData } from '../lib/chart-data'
+import { useLastBackup } from '../lib/useLastBackup'
+import { hasPickedBackup } from '../lib/backup-picker'
+import { Card, SectionTitle, Btn } from '../components/kit'
+import { AreaChart, BarChart, Donut, Legend } from '../components/charts'
 
-export default function Dashboard() {
-  const { customers, invoices, expenses, products, business } = useFatorati()
-  
-  const stats = {
-    totalCustomers: customers.length,
-    totalInvoices: invoices.length,
-    totalRevenue: invoices.filter(inv => inv.status === 'paid').reduce((sum, inv) => sum + inv.total, 0),
-    pendingInvoices: invoices.filter(inv => inv.status === 'sent').length,
-    totalExpenses: expenses.reduce((sum, exp) => sum + exp.amount, 0),
-    totalProducts: products.length,
-  }
-
-  const recentInvoices = invoices.slice(0, 5)
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-sm text-gray-600 mt-1">
-          Welcome back, {business?.ownerName || 'Owner'} • {business?.name} • 100% Local • Offline
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-6 rounded-xl border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Customers</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{stats.totalCustomers}</p>
-            </div>
-            <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center">
-              <span className="text-xl">👥</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Invoices</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{stats.totalInvoices}</p>
-              <p className="text-xs text-gray-500 mt-1">{stats.pendingInvoices} pending</p>
-            </div>
-            <div className="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center">
-              <span className="text-xl">📄</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Revenue</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{money(stats.totalRevenue)}</p>
-              <p className="text-xs text-green-600 mt-1">Paid invoices</p>
-            </div>
-            <div className="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center">
-              <span className="text-xl">💰</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Expenses</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{money(stats.totalExpenses)}</p>
-              <p className="text-xs text-gray-500 mt-1">{expenses.length} records</p>
-            </div>
-            <div className="w-12 h-12 bg-red-50 rounded-lg flex items-center justify-center">
-              <span className="text-xl">💸</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Invoices</h2>
-          {recentInvoices.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-gray-500 text-sm">No invoices yet</p>
-              <p className="text-xs text-gray-400 mt-1">Create invoice → PDF → Share</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {recentInvoices.map((inv) => (
-                <div key={inv.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="font-medium text-sm text-gray-900">{inv.number}</p>
-                    <p className="text-xs text-gray-600">{inv.customerId}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-medium text-sm text-gray-900">{money(inv.total)}</p>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${
-                      inv.status === 'paid' ? 'bg-green-100 text-green-700' :
-                      inv.status === 'sent' ? 'bg-blue-100 text-blue-700' :
-                      inv.status === 'overdue' ? 'bg-red-100 text-red-700' :
-                      'bg-gray-100 text-gray-700'
-                    }`}>
-                      {inv.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-2">100% Local • Offline</h2>
-          <div className="space-y-3 text-sm text-gray-600">
-            <p>
-              <span className="font-semibold text-gray-900">Fatorati - Simple business management.</span> No subscription. Your customers, invoices and business records stay on your device. Works offline.
-            </p>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <p className="font-medium text-blue-900 text-xs">How it works:</p>
-              <p className="text-blue-800 text-xs mt-1">Create invoice → PDF → Share - easy for US customers</p>
-            </div>
-            <ul className="space-y-1.5 text-xs">
-              <li className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
-                Your data stays on device - 100% offline
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
-                No subscription, no cloud dependency
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
-                Works offline, airplane mode ready
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
-                Export backup .fatorati file anytime
-              </li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Business Overview</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-          <div className="p-4 bg-gray-50 rounded-lg">
-            <p className="text-2xl font-bold text-gray-900">{customers.length}</p>
-            <p className="text-xs text-gray-600 mt-1">Customers</p>
-          </div>
-          <div className="p-4 bg-gray-50 rounded-lg">
-            <p className="text-2xl font-bold text-gray-900">{products.length}</p>
-            <p className="text-xs text-gray-600 mt-1">Products</p>
-          </div>
-          <div className="p-4 bg-gray-50 rounded-lg">
-            <p className="text-2xl font-bold text-gray-900">{invoices.length}</p>
-            <p className="text-xs text-gray-600 mt-1">Invoices</p>
-          </div>
-          <div className="p-4 bg-gray-50 rounded-lg">
-            <p className="text-2xl font-bold text-gray-900">{expenses.length}</p>
-            <p className="text-xs text-gray-600 mt-1">Expenses</p>
-          </div>
-        </div>
-      </div>
+export default function Dashboard({onNavigate}:{onNavigate:(key:ModuleKey)=>void}) {
+  const {t}=useI18n(),prefs=usePreferences(),{invoices,expenses,customers,products,business}=useFatorati(),{overdue}=useLastBackup()
+  const [range,setRange]=useState(8),[selected,setSelected]=useState(prefs.defaultCurrency)
+  const currencies=[...new Set([prefs.defaultCurrency,...invoices.map(row=>row.currency||prefs.defaultCurrency),...expenses.map(row=>row.currency||prefs.defaultCurrency)])]
+  const currency=currencies.includes(selected)?selected:prefs.defaultCurrency
+  const [now]=useState(Date.now)
+  const data=useMemo(()=>chartData(invoices,expenses,currency,range,now,prefs.timeZone,locale(prefs.language),prefs.defaultCurrency),[invoices,expenses,currency,range,now,prefs.timeZone,prefs.language,prefs.digits,prefs.defaultCurrency])
+  const result=reportTotals(invoices,expenses,prefs.defaultCurrency).totals.find(row=>row.currency===currency)||{revenue:0,profit:0,pending:0,expenses:0}
+  const metrics=[
+    {label:'Total Revenue (Paid)',value:result.revenue,icon:TrendingUp,tint:'bg-brand-50 text-brand-700'},
+    {label:'Net Profit',value:result.profit,icon:PiggyBank,tint:'bg-good-50 text-emerald-700'},
+    {label:'Total Expenses',value:result.expenses,icon:ReceiptText,tint:'bg-brand-50 text-brand-700'},
+    {label:'Pending Revenue',value:result.pending,icon:Landmark,tint:'bg-warn-50 text-warn'},
+  ]
+  const quick=[{key:'projects' as const,label:'Projects',icon:FolderPlus,tint:'bg-brand'},{key:'expenses' as const,label:'Expenses',icon:ReceiptText,tint:'bg-emerald-brand text-white'},{key:'invoices' as const,label:'Invoices',icon:FileText,tint:'bg-navy text-white'}]
+  const series=[{name:t('Revenue'),values:data.revenue},{name:t('Expenses'),values:data.expense,color:'var(--chart-3)'}]
+  return <div className="mz-view space-y-6">
+    <SectionTitle title={t('Dashboard')} sub={`${t('Welcome back,')} ${business?.ownerName||''} · ${formatDate(now,true)}`} action={<div className="flex flex-wrap items-center gap-2">
+      <select aria-label={t('Currency')} value={currency} onChange={e=>setSelected(e.target.value)} className="rounded-lg border border-line-strong bg-surface px-3 py-2 text-[12.5px] font-semibold text-ink outline-none focus:border-brand">{currencies.map(code=><option key={code}>{code}</option>)}</select>
+      <select aria-label={t('Chart range')} value={range} onChange={e=>setRange(Number(e.target.value))} className="rounded-lg border border-line-strong bg-surface px-3 py-2 text-[12.5px] font-semibold text-ink outline-none focus:border-brand">{[6,8,12].map(count=><option key={count} value={count}>{t('Last months',{count})}</option>)}</select>
+    </div>}/>
+    {hasPickedBackup()&&<Card className="border-brand/20 bg-brand-50 p-4 text-[13px]"><button onClick={()=>onNavigate('settings')} className="text-start">{t('Backup selected; open Settings to finish importing')}</button></Card>}
+    {overdue&&<Card className="border-warn/20 bg-warn-50 p-4 text-[13px] text-warn"><button onClick={()=>onNavigate('settings')} className="text-start">{t('Backup reminder: no backup in the last 7 days. Open Settings → Backup & Restore to protect your data.')}</button></Card>}
+    <div className="grid gap-3 sm:grid-cols-3">{quick.map(action=><button key={action.key} onClick={()=>onNavigate(action.key)} className="group flex items-center gap-3 rounded-xl border border-line bg-surface p-4 text-start shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all hover:-translate-y-0.5 hover:shadow-md"><span className={`grid h-10 w-10 place-items-center rounded-lg ${action.tint}`}><action.icon className="h-5 w-5"/></span><span className="text-[13.5px] font-semibold">{t(action.label)}</span></button>)}</div>
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{metrics.map(metric=><Card key={metric.label} className="p-5"><div className="flex items-start justify-between"><span className={`grid h-9 w-9 place-items-center rounded-lg ${metric.tint}`}><metric.icon className="h-4.5 w-4.5" strokeWidth={2.2}/></span><span className="text-[11.5px] font-semibold text-muted">{currency}</span></div><p className="mt-4 text-[12px] font-medium text-muted">{t(metric.label)}</p><p className="tnum mt-1 text-[22px] font-bold leading-none tracking-tight break-words">{money(metric.value,currency)}</p></Card>)}</div>
+    <div className="grid gap-4 lg:grid-cols-3">
+      <Card className="min-w-0 p-5 lg:col-span-2"><div className="mb-3 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-[14px] font-bold">{t('Financial flow')}</h2><p className="text-[12px] text-muted">{t('Revenue vs expenses')} · {currency}</p></div><Legend series={series}/></div><AreaChart label={t('Financial flow')} labels={data.labels} series={series} format={value=>money(value,currency,true)}/></Card>
+      <Card className="min-w-0 p-5"><h2 className="text-[14px] font-bold">{t('Expense breakdown')}</h2><p className="mb-4 text-[12px] text-muted">{t('Positive expenses by category')} · {currency}</p><Donut label={t('Expense breakdown')} percent={value=>new Intl.NumberFormat(locale(),{style:'percent',maximumFractionDigits:0}).format(value)} segments={data.categories.map((row,i)=>({...row,label:t(row.label),color:`var(--chart-${i%4+1})`}))}/>{!data.categories.length&&<p className="mt-3 text-[12px] text-muted">{t('No expenses yet')}</p>}</Card>
     </div>
-  )
+    <Card className="min-w-0 p-5"><div className="mb-3"><h2 className="text-[14px] font-bold">{t('Monthly net flow')}</h2><p className="text-[12px] text-muted">{t('Revenue minus expenses')} · {currency}</p></div><BarChart label={t('Monthly net flow')} labels={data.labels} series={[{name:t('Net Profit'),values:data.net}]} format={value=>money(value,currency,true)}/></Card>
+    <details className="rounded-xl border border-line bg-surface p-4 text-[12px]"><summary className="cursor-pointer font-semibold">{t('Chart data')}</summary><div className="mt-3 overflow-x-auto"><table className="w-full text-start"><thead><tr>{['Month','Revenue','Expenses','Net Profit'].map(key=><th key={key} className="p-2 text-start text-muted">{t(key)}</th>)}</tr></thead><tbody>{data.labels.map((label,i)=><tr key={data.keys[i]} className="border-t border-line"><td className="p-2">{label}</td>{[data.revenue[i],data.expense[i],data.net[i]].map((value,j)=><td key={j} className="tnum p-2">{money(value,currency)}</td>)}</tr>)}</tbody></table></div></details>
+    <Card><header className="flex items-center justify-between border-b border-line px-5 py-3.5"><h2 className="text-[14px] font-bold">{t('Recent Invoices')}</h2><Btn variant="ghost" size="sm" onClick={()=>onNavigate('invoices')}>{t('Invoices')}</Btn></header>{!invoices.length?<p className="px-5 py-8 text-center text-[13px] text-muted">{t('No invoices yet')}</p>:<ul className="divide-y divide-line">{invoices.slice(0,5).map(invoice=><li key={invoice.id} className="flex items-center gap-3 px-5 py-3 text-[13px]"><span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${invoice.status==='paid'?'bg-good-50 text-emerald-700 ring-good/20':'bg-warn-50 text-warn ring-warn/20'}`}>{t(invoice.status)}</span><div className="min-w-0 flex-1"><p className="truncate font-semibold">{invoice.number}</p><p className="truncate text-[12px] text-muted">{customers.find(row=>row.id===invoice.customerId)?.name} · {formatDate(invoice.occurredAt??invoice.createdAt,true)}</p></div><span className="tnum font-semibold">{money(invoice.total,invoice.currency)}</span></li>)}</ul>}</Card>
+    <div className="grid gap-3 sm:grid-cols-2">{[{key:'customers' as const,label:'Customers',count:customers.length,icon:Users},{key:'products' as const,label:'Products',count:products.length,icon:Package}].map(item=><button key={item.key} onClick={()=>onNavigate(item.key)} className="flex items-center gap-3 rounded-xl border border-line bg-surface p-4 text-[13px] text-start"><item.icon className="h-4 w-4 text-brand"/><span>{t(item.label)}</span><span className="tnum ms-auto font-semibold">{number(item.count)}</span></button>)}</div>
+  </div>
 }

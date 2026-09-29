@@ -1,7 +1,13 @@
 @import 'tailwindcss';
+@import './fonts.css';
 
 @theme {
   --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-display: 'Sora', 'Inter', system-ui, sans-serif;
+  --font-arabic: 'Tajawal', 'Inter', system-ui, sans-serif;
+
+  /* Ink / surfaces (light content area) */
   --color-ink: #0b1220;
   --color-canvas: #f4f6f9;
   --color-surface: #ffffff;
@@ -9,29 +15,167 @@
   --color-line-strong: #d3d8e2;
   --color-muted: #64748b;
   --color-faint: #94a3b8;
+
+  /* Brand */
   --color-brand: #2563eb;
   --color-brand-50: #eef3ff;
   --color-brand-100: #dbe6ff;
   --color-brand-700: #1d4ed8;
   --color-navy: #0f172a;
+
+  --color-emerald-brand: #10b981;
+  --color-emerald-50: #e7f9f1;
+  --color-emerald-700: #047857;
+
+  /* Sidebar (dark) */
+  --color-sidebar: #0f172a;
+  --color-sidebar-hover: #1e293b;
+  --color-sidebar-active: #2563eb;
+  --color-sidebar-ink: #cbd5e1;
+  --color-sidebar-faint: #64748b;
+
+  /* Status */
+  --color-good: #10b981;
+  --color-good-50: #e7f9f1;
+  --color-warn: #d97706;
+  --color-warn-50: #fdf3e7;
+  --color-serious: #dc2626;
+  --color-serious-50: #fdeaea;
+  --color-info-50: #eef3ff;
+
+  /* Chart categorical (validated) */
+  --chart-1: #2563eb;
+  --chart-2: #10b981;
+  --chart-3: #f59e0b;
+  --chart-4: #8b5cf6;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+/* Arabic font and bidi isolation; numeral selection remains controlled by Intl. */
+[dir='rtl'] {
+  font-family: var(--font-arabic);
+}
+[dir='rtl'] .tnum,
+[dir='rtl'] .mz-ltr-num {
+  direction: ltr;
+  unicode-bidi: isolate;
 }
 
 * {
-  box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+*:hover {
+  scrollbar-color: #cbd5e1 transparent;
+}
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+*::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 9px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*:hover::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  background-clip: content-box;
+}
+/* Dark scrollbar inside sidebar */
+.dark-scroll:hover::-webkit-scrollbar-thumb {
+  background: #334155;
+  background-clip: content-box;
 }
 
-html, body {
-  margin: 0;
-  padding: 0;
-  font-family: var(--font-sans);
-  background: var(--color-canvas);
-  color: var(--color-ink);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+::selection {
+  background: var(--color-brand);
+  color: #fff;
 }
 
-#root {
-  min-height: 100vh;
+@keyframes mz-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes mz-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes mz-slide {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.mz-view {
+  animation: mz-slide 0.22s ease-out;
 }
 
-/* Fatorati Offline - 100% Local • Offline */
+
+/* Same application layout in both modes; only semantic colors change. */
+:root { --accent:#2563eb; --accent-ink:#ffffff; --accent-hover-ink:#ffffff; }
+:root[data-theme="dark"] {
+  color-scheme:dark;
+  --color-ink:#e8edf6; --color-canvas:#0b1220; --color-surface:#111c2e;
+  --color-line:#263449; --color-line-strong:#3b4d66; --color-muted:#a8b6ca; --color-faint:#8a9db7;
+  --color-brand-50:#162b4c; --color-brand-100:#1c3964;
+  --color-good:#34d399; --color-good-50:#112f29; --color-emerald-50:#112f29; --color-emerald-700:#6ee7b7;
+  --color-warn:#fbbf24; --color-warn-50:#32281a;
+  --chart-1:#60a5fa; --chart-2:#34d399; --chart-3:#fbbf24; --chart-4:#a78bfa;
+  --color-serious:#fca5a5; --color-serious-50:#35202a; --color-info-50:#162b4c;
+}
+:root[data-accent="custom"] {
+  --color-brand:var(--accent);
+  --color-brand-700:var(--accent-hover);
+  --color-sidebar-active:var(--accent);
+  --chart-1:var(--accent-link);
+  --color-brand-50:color-mix(in srgb,var(--accent) 10%,var(--color-surface));
+  --color-brand-100:color-mix(in srgb,var(--accent) 18%,var(--color-surface));
+}
+.bg-brand,.bg-sidebar-active { color:var(--accent-ink); }
+.hover\:bg-brand-700:hover { color:var(--accent-hover-ink); }
+:root[data-theme="dark"] .text-brand, :root[data-theme="dark"] .text-brand-700,
+:root[data-accent="custom"] .text-brand, :root[data-accent="custom"] .text-brand-700 { color:var(--accent-link,#93b7ff); }
+::selection { color:var(--accent-ink); }
+:root[data-spacing="compact"] { --spacing:0.2rem; }
+[dir="rtl"] .directional { transform:scaleX(-1); }
+[dir="rtl"] .uppercase { letter-spacing:normal; }
+@media (prefers-reduced-motion:reduce) { .mz-view { animation:none; } }
+@media print { .no-print { display:none !important; } }

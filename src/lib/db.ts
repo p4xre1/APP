@@ -1,362 +1,105 @@
-/**
- * Fatorati Offline - Robust Local Database using IndexedDB
- * Handles hundreds/thousands of invoices, customers, etc.
- * Structure: Businesses, Customers, Projects, Invoices, Estimates, Expenses, Products, Settings
- * 100% Local • Offline - Your data stays on device
- */
-
-export interface Business {
-  id: string
-  name: string
-  ownerName: string
-  phone: string
-  email: string
-  address: string
-  logo?: string // base64
-  createdAt: number
-  updatedAt: number
-}
-
-export interface Customer {
-  id: string
-  name: string
-  email: string
-  phone: string
-  address: string
-  city: string
-  notes: string
-  balance: number
-  createdAt: number
-  updatedAt: number
-}
-
-export interface Project {
-  id: string
-  name: string
-  customerId: string
-  description: string
-  status: 'planning' | 'active' | 'on_hold' | 'done'
-  budget: number
-  createdAt: number
-  updatedAt: number
-}
-
-export interface Invoice {
-  id: string
-  number: string
-  customerId: string
-  projectId?: string
-  items: InvoiceItem[]
-  subtotal: number
-  tax: number
-  total: number
-  status: 'draft' | 'sent' | 'paid' | 'overdue'
-  issueDate: string
-  dueDate: string
-  notes: string
-  createdAt: number
-  updatedAt: number
-}
-
-export interface InvoiceItem {
-  id: string
-  productId?: string
-  description: string
-  quantity: number
-  unitPrice: number
-  total: number
-}
-
-export interface Estimate {
-  id: string
-  number: string
-  customerId: string
-  projectId?: string
-  items: InvoiceItem[]
-  subtotal: number
-  tax: number
-  total: number
-  status: 'draft' | 'sent' | 'accepted' | 'declined'
-  issueDate: string
-  expiryDate: string
-  notes: string
-  createdAt: number
-  updatedAt: number
-}
-
-export interface Expense {
-  id: string
-  description: string
-  amount: number
-  category: string
-  date: string
-  vendor: string
-  receipt?: string
-  createdAt: number
-  updatedAt: number
-}
-
-export interface Product {
-  id: string
-  name: string
-  description: string
-  sku: string
-  unitPrice: number
-  unit: string
-  stock: number
-  createdAt: number
-  updatedAt: number
-}
-
-export interface Settings {
-  id: string
-  businessId: string
-  currency: 'USD' | 'EUR'
-  taxRate: number
-  invoicePrefix: string
-  estimatePrefix: string
-  theme: 'light' | 'dark'
-  language: 'en'
-  createdAt: number
-  updatedAt: number
-}
+import type { Business, Customer, Project, Invoice, Estimate, Expense, Product, Settings } from '../store/types'
+export type { Business, Customer, Project, Invoice, InvoiceItem, Estimate, Expense, Product, Settings } from '../store/types'
+import { BACKUP_VERSION, migrateBackup, normalizeRecord, encodeBackup, decodeBackup } from './backup-format'
+import type { ImportMode, ImportSummary } from './backup-format'
+import { STORES, type StoreName } from './schema'
+import { commit, exclusive, type PlainRecord, type Snapshot } from './storage'
+import { unlockedSnapshot, encryptRecord, sessionGuard, isUnlocked, readMeta } from './vault'
+import { shareFile } from './share-file'
+import { Preferences } from '@capacitor/preferences'
+import { getPreferences, savePreferences, type DisplayPreferences } from './preferences'
 
 export interface FatoratiBackup {
-  version: string
-  exportedAt: number
-  businesses: Business[]
-  customers: Customer[]
-  projects: Project[]
-  invoices: Invoice[]
-  estimates: Estimate[]
-  expenses: Expense[]
-  products: Product[]
-  settings: Settings[]
+  version: string; exportedAt: number; preferences: DisplayPreferences
+  security: { appLock: true; biometricEnabled: boolean }
+  businesses: Business[]; customers: Customer[]; projects: Project[]; invoices: Invoice[]
+  estimates: Estimate[]; expenses: Expense[]; products: Product[]; settings: Settings[]
 }
-
-const DB_NAME = 'fatorati-offline-v1'
-const DB_VERSION = 1
-const STORES = ['businesses', 'customers', 'projects', 'invoices', 'estimates', 'expenses', 'products', 'settings'] as const
-
-type StoreName = typeof STORES[number]
-
-function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION)
-    
-    request.onerror = () => reject(request.error)
-    request.onsuccess = () => resolve(request.result)
-    
-    request.onupgradeneeded = (event) => {
-      const db = (event.target as IDBOpenDBRequest).result
-      
-      for (const storeName of STORES) {
-        if (!db.objectStoreNames.contains(storeName)) {
-          const store = db.createObjectStore(storeName, { keyPath: 'id' })
-          store.createIndex('createdAt', 'createdAt', { unique: false })
-          store.createIndex('updatedAt', 'updatedAt', { unique: false })
-          
-          if (storeName === 'invoices' || storeName === 'estimates') {
-            store.createIndex('customerId', 'customerId', { unique: false })
-            store.createIndex('number', 'number', { unique: true })
-          }
-          if (storeName === 'customers') {
-            store.createIndex('name', 'name', { unique: false })
-          }
-        }
-      }
-    }
-  })
-}
-
-export async function getAll<T>(storeName: StoreName): Promise<T[]> {
-  const db = await openDB()
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(storeName, 'readonly')
-    const store = transaction.objectStore(storeName)
-    const request = store.getAll()
-    
-    request.onerror = () => reject(request.error)
-    request.onsuccess = () => resolve(request.result as T[])
-  })
-}
-
-export async function getById<T>(storeName: StoreName, id: string): Promise<T | undefined> {
-  const db = await openDB()
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(storeName, 'readonly')
-    const store = transaction.objectStore(storeName)
-    const request = store.get(id)
-    
-    request.onerror = () => reject(request.error)
-    request.onsuccess = () => resolve(request.result as T | undefined)
-  })
-}
-
-export async function add<T extends { id: string; createdAt: number; updatedAt: number }>(
-  storeName: StoreName,
-  item: Omit<T, 'createdAt' | 'updatedAt'> & { id?: string }
-): Promise<T> {
-  const db = await openDB()
-  const now = Date.now()
-  const fullItem = {
-    ...item,
-    id: item.id || generateId(),
-    createdAt: now,
-    updatedAt: now,
-  } as T
-
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(storeName, 'readwrite')
-    const store = transaction.objectStore(storeName)
-    const request = store.add(fullItem)
-    
-    request.onerror = () => reject(request.error)
-    request.onsuccess = () => resolve(fullItem)
-  })
-}
-
-export async function update<T extends { id: string; updatedAt: number }>(
-  storeName: StoreName,
-  id: string,
-  patch: Partial<Omit<T, 'id' | 'createdAt'>>
-): Promise<T> {
-  const existing = await getById<T>(storeName, id)
-  if (!existing) throw new Error(`${storeName} with id ${id} not found`)
-  
-  const updated = {
-    ...existing,
-    ...patch,
-    id,
-    updatedAt: Date.now(),
-  } as T
-
-  const db = await openDB()
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(storeName, 'readwrite')
-    const store = transaction.objectStore(storeName)
-    const request = store.put(updated)
-    
-    request.onerror = () => reject(request.error)
-    request.onsuccess = () => resolve(updated)
-  })
-}
-
-export async function remove(storeName: StoreName, id: string): Promise<void> {
-  const db = await openDB()
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(storeName, 'readwrite')
-    const store = transaction.objectStore(storeName)
-    const request = store.delete(id)
-    
-    request.onerror = () => reject(request.error)
-    request.onsuccess = () => resolve()
-  })
-}
-
-export async function clear(storeName: StoreName): Promise<void> {
-  const db = await openDB()
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(storeName, 'readwrite')
-    const store = transaction.objectStore(storeName)
-    const request = store.clear()
-    
-    request.onerror = () => reject(request.error)
-    request.onsuccess = () => resolve()
-  })
-}
-
-export function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
-}
-
-// Backup and Restore
-export async function exportBackup(): Promise<FatoratiBackup> {
-  const [businesses, customers, projects, invoices, estimates, expenses, products, settings] = await Promise.all([
-    getAll<Business>('businesses'),
-    getAll<Customer>('customers'),
-    getAll<Project>('projects'),
-    getAll<Invoice>('invoices'),
-    getAll<Estimate>('estimates'),
-    getAll<Expense>('expenses'),
-    getAll<Product>('products'),
-    getAll<Settings>('settings'),
-  ])
-
-  return {
-    version: '1.0.0',
-    exportedAt: Date.now(),
-    businesses,
-    customers,
-    projects,
-    invoices,
-    estimates,
-    expenses,
-    products,
-    settings,
+export async function getAll<T>(name: StoreName): Promise<T[]> { return (await unlockedSnapshot()).stores[name] as unknown as T[] }
+export async function getById<T>(name: StoreName,id:string): Promise<T | undefined> { return (await getAll<PlainRecord>(name)).find(row=>row.id===id) as T | undefined }
+function normalize(name:StoreName, source:Record<string,unknown>) {
+  const prefs=getPreferences(), row={...source}
+  if(['businesses','invoices','estimates','expenses'].includes(name)) row.currency ||= prefs.defaultCurrency
+  if(['invoices','estimates','expenses'].includes(name)) {
+    row.language ||= prefs.language; row.occurredAt ||= row.createdAt; row.pdfColor ??= prefs.pdfColor
   }
+  if(row.exchangeRate !== undefined && (typeof row.exchangeRate !== 'number' || !Number.isFinite(row.exchangeRate) || row.exchangeRate <= 0)) throw new Error('Invalid amount')
+  return normalizeRecord(name,row,prefs.defaultCurrency) as PlainRecord
 }
-
-export async function importBackup(backup: FatoratiBackup): Promise<void> {
-  const db = await openDB()
-  
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORES as unknown as string[], 'readwrite')
-    
-    transaction.onerror = () => reject(transaction.error)
-    transaction.oncomplete = () => resolve()
-
-    for (const storeName of STORES) {
-      const store = transaction.objectStore(storeName)
-      store.clear()
-      
-      const items = backup[storeName as keyof FatoratiBackup] as any[]
-      if (Array.isArray(items)) {
-        for (const item of items) {
-          store.add(item)
-        }
-      }
+export const add = <T extends {id:string;createdAt:number;updatedAt:number}>(name:StoreName,item:Omit<T,'id'|'createdAt'|'updatedAt'> & {id?:string}):Promise<T> => exclusive(async()=>{
+  const guard=sessionGuard(), snapshot=await unlockedSnapshot(), now=Date.now()
+  const row=normalize(name,{...item,id:item.id||generateId(),createdAt:now,updatedAt:now})
+  if(snapshot.stores[name].some(item=>item.id===row.id)) throw new Error('Duplicate record')
+  const records=await Promise.all([...snapshot.stores[name],row].map(item=>encryptRecord(name,item)))
+  await commit(snapshot.meta.revision,snapshot.meta,{[name]:records},guard)
+  return row as unknown as T
+})
+export const update = <T extends {id:string;updatedAt:number}>(name:StoreName,id:string,patch:Partial<Omit<T,'id'|'createdAt'>>):Promise<T> => exclusive(async()=>{
+  const guard=sessionGuard(),snapshot=await unlockedSnapshot(),existing=snapshot.stores[name].find(item=>item.id===id)
+  if(!existing) throw new Error('Record not found')
+  const row=normalize(name,{...existing,...patch,id,createdAt:existing.createdAt,updatedAt:Date.now()})
+  const records=await Promise.all(snapshot.stores[name].map(item=>encryptRecord(name,item.id===id?row:item)))
+  await commit(snapshot.meta.revision,snapshot.meta,{[name]:records},guard)
+  return row as unknown as T
+})
+export const remove = (name:StoreName,id:string) => exclusive(async()=>{
+  const guard=sessionGuard(),snapshot=await unlockedSnapshot()
+  const records=await Promise.all(snapshot.stores[name].filter(item=>item.id!==id).map(item=>encryptRecord(name,item)))
+  await commit(snapshot.meta.revision,snapshot.meta,{[name]:records},guard)
+})
+export const clear = (name:StoreName) => exclusive(async()=>{
+  const guard=sessionGuard(),snapshot=await unlockedSnapshot()
+  await commit(snapshot.meta.revision,snapshot.meta,{[name]:[]},guard)
+})
+export const generateId = () => crypto.randomUUID()
+export async function exportBackup():Promise<FatoratiBackup> {
+  const snapshot=await unlockedSnapshot()
+  // Old installed databases gain per-document currency/language on export as well.
+  const source = {security:{appLock:true,biometricEnabled:snapshot.meta.biometric},version:BACKUP_VERSION,exportedAt:Date.now(),preferences:getPreferences(),...snapshot.stores}
+  for(const name of STORES) source[name]=source[name].map(row=>normalize(name,row))
+  return migrateBackup(source)
+}
+export const importBackup = (input:FatoratiBackup,mode:ImportMode):Promise<ImportSummary> => exclusive(async()=>{
+  const backup=migrateBackup(input) // Full validation, before any writes.
+  if(mode!=='merge'&&mode!=='replace') throw new Error('Choose Replace or Merge')
+  const guard=sessionGuard(),snapshot=await unlockedSnapshot(),summary={added:0,updated:0,skipped:0}
+  const encrypted={} as Snapshot['stores']
+  for(const name of STORES) {
+    const records=new Map((mode==='merge'?snapshot.stores[name]:[]).map(item=>[item.id,item]))
+    for(const incoming of backup[name]) {
+      const existing=records.get(incoming.id)
+      if(!existing){records.set(incoming.id,incoming as unknown as PlainRecord);summary.added++}
+      else if(incoming.updatedAt>existing.updatedAt){records.set(incoming.id,incoming as unknown as PlainRecord);summary.updated++}
+      else summary.skipped++
     }
-  })
+    encrypted[name]=await Promise.all([...records.values()].map(item=>encryptRecord(name,item)))
+  }
+  const prefs=mode==='replace'||backup.preferences.updatedAt>getPreferences().updatedAt ? backup.preferences : getPreferences()
+  // Persist display preferences in the same transaction; mirror to Capacitor on next unlock.
+  await commit(snapshot.meta.revision,{...snapshot.meta,pendingPreferences:prefs},encrypted,guard)
+  return summary
+})
+export const applyImportedPreferences = () => exclusive(async () => {
+  const guard=sessionGuard(), meta=await readMeta()
+  if(meta.pendingPreferences) {
+    await savePreferences(meta.pendingPreferences)
+    const next={...meta}; delete next.pendingPreferences
+    await commit(meta.revision,next,undefined,guard)
+  }
+})
+export const LAST_BACKUP_KEY='fatorati.lastBackupAt'
+export async function getLastBackupDate():Promise<number|null> {
+  const {value}=await Preferences.get({key:LAST_BACKUP_KEY}),date=Number(value)
+  return value&&Number.isFinite(date)&&date>0&&date<=8.64e15?date:null
 }
-
-export function downloadBackupFile(backup: FatoratiBackup, filename?: string): void {
-  const json = JSON.stringify(backup, null, 2)
-  const blob = new Blob([json], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename || `fatorati-backup-${new Date().toISOString().split('T')[0]}.fatorati`
-  a.click()
-  URL.revokeObjectURL(url)
+export async function downloadBackupFile(backup:FatoratiBackup,password=''):Promise<void> {
+  if(!isUnlocked()) throw new Error('App locked')
+  if(!password) throw new Error('A backup password is required while app lock is enabled')
+  const guard=sessionGuard(),json=await encodeBackup(backup,password);guard()
+  await shareFile(`fatorati-backup-${new Date().toISOString().slice(0,10)}.fatorati`,json,'application/json')
+  await Preferences.set({key:LAST_BACKUP_KEY,value:String(Date.now())})
+  window.dispatchEvent(new Event('fatorati:backup'))
 }
-
-export async function loadBackupFile(file: File): Promise<FatoratiBackup> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onerror = () => reject(reader.error)
-    reader.onload = () => {
-      try {
-        const backup = JSON.parse(reader.result as string) as FatoratiBackup
-        if (!backup.version || !backup.exportedAt) {
-          throw new Error('Invalid backup file format')
-        }
-        resolve(backup)
-      } catch (e) {
-        reject(e)
-      }
-    }
-    reader.readAsText(file)
-  })
-}
-
-// Check if onboarding completed
-export async function isOnboardingCompleted(): Promise<boolean> {
-  const businesses = await getAll<Business>('businesses')
-  return businesses.length > 0
-}
-
-export async function getBusiness(): Promise<Business | null> {
-  const businesses = await getAll<Business>('businesses')
-  return businesses[0] || null
-}
+export async function loadBackupFile(file:File,password?:string) { return decodeBackup(await file.text(),password) }
+export async function isOnboardingCompleted(){return (await getAll<Business>('businesses')).length>0}
+export async function getBusiness(){return (await getAll<Business>('businesses'))[0]||null}

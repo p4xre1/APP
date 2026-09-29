@@ -1,6 +1,6 @@
 import { showAlert } from '../lib/dialogs'
 import { number } from '../lib/format'
-import { t } from '../i18n'
+import { useI18n } from '../i18n'
 import DocumentOptions from '../components/DocumentOptions'
 import { getPreferences } from '../lib/preferences'
 import { roundMoney, sumMoney, formatDate } from '../lib/format'
@@ -12,51 +12,76 @@ import { useState } from 'react'
 import { useFatorati } from '../store/useFatorati'
 import { money, generateInvoiceNumber } from '../lib/fatorati'
 import { Plus, Download, Share2, X } from 'lucide-react'
+import NumberInput from '../components/NumberInput'
+import { Field, TextField, fieldInputClass, fieldLabelClass } from '../components/Field'
+import { numberError } from '../lib/number-input'
+
+interface ItemForm { description: string; quantity: number | null; unitPrice: number | null }
+interface ItemErrors { description?: string; quantity?: string; unitPrice?: string }
+const emptyItem = (): ItemForm => ({ description: '', quantity: null, unitPrice: null })
 
 export default function Invoices() {
-  const { invoices, customers, business, settings, addInvoice, deleteInvoice, updateInvoice } = useFatorati()
+  const { t } = useI18n()
+  const { invoices, customers, projects, business, settings, addInvoice, deleteInvoice, updateInvoice } = useFatorati()
   const [showAdd, setShowAdd] = useState(false)
+  const [errors, setErrors] = useState<{ customer?: string; itemsError?: string; items: ItemErrors[] }>({ items: [] })
   const [form, setForm] = useState({
     currency: getPreferences().defaultCurrency, language: getPreferences().language, pdfColor: getPreferences().pdfColor, exchangeRate: undefined as number | undefined, rateCurrency: undefined as string | undefined,
     customerId: '',
-    items: [{ description: '', quantity: 1, unitPrice: 0 }],
+    projectId: '',
+    items: [emptyItem()],
     notes: '',
   })
 
   function calculateTotal() {
-    const subtotal = sumMoney(form.items.map(item=>roundMoney(item.quantity * roundMoney(item.unitPrice,form.currency), form.currency)), form.currency)
+    const subtotal = sumMoney(form.items.map(item => {
+      const quantity = item.quantity ?? 0, unitPrice = item.unitPrice ?? 0
+      return roundMoney(quantity * roundMoney(unitPrice, form.currency), form.currency)
+    }), form.currency)
     return { subtotal, tax: 0, total: subtotal }
   }
 
   async function handleAdd() {
     try {
-    if (!form.customerId || form.items.length === 0) return
-    const { subtotal, tax, total } = calculateTotal()
-    
-    const items = form.items.map(item => ({
-      id: Math.random().toString(36).slice(2),
-      description: item.description,
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      total: item.quantity * item.unitPrice,
-    }))
+      // Required fields must not be empty: empty means "no value yet", never 0.
+      const itemErrors: ItemErrors[] = form.items.map(item => ({
+        description: item.description.trim() ? undefined : 'Required field',
+        quantity: numberError(item.quantity, { required: true, min: 0 }) || undefined,
+        unitPrice: numberError(item.unitPrice, { required: true, min: 0 }) || undefined,
+      }))
+      const customerError = form.customerId ? undefined : 'Required field'
+      const itemsError = form.items.length ? undefined : 'Required field'
+      const hasErrors = !!customerError || !!itemsError || itemErrors.some(row => row.description || row.quantity || row.unitPrice)
+      setErrors({ customer: customerError, itemsError, items: itemErrors })
+      if (hasErrors) return
 
-    await addInvoice({
-      number: generateInvoiceNumber('INV'),
-      currency: form.currency, language: form.language, pdfColor: form.pdfColor, exchangeRate: form.exchangeRate, rateCurrency: form.rateCurrency,
-      customerId: form.customerId,
-      items,
-      subtotal,
-      tax,
-      total,
-      status: 'draft',
-      issueDate: new Date().toISOString().split('T')[0],
-      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      notes: form.notes,
-    })
-    
-    setForm({ ...form, customerId: '', items: [{ description: '', quantity: 1, unitPrice: 0 }], notes: '' })
-    setShowAdd(false)
+      const { subtotal, tax, total } = calculateTotal()
+      const items = form.items.map(item => ({
+        id: Math.random().toString(36).slice(2),
+        description: item.description.trim(),
+        quantity: item.quantity ?? 0,
+        unitPrice: item.unitPrice ?? 0,
+        total: (item.quantity ?? 0) * (item.unitPrice ?? 0),
+      }))
+
+      await addInvoice({
+        number: generateInvoiceNumber('INV'),
+        currency: form.currency, language: form.language, pdfColor: form.pdfColor, exchangeRate: form.exchangeRate, rateCurrency: form.rateCurrency,
+        customerId: form.customerId,
+        projectId: form.projectId || undefined,
+        items,
+        subtotal,
+        tax,
+        total,
+        status: 'draft',
+        issueDate: new Date().toISOString().split('T')[0],
+        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        notes: form.notes,
+      })
+
+      setForm({ ...form, customerId: '', projectId: '', items: [emptyItem()], notes: '' })
+      setErrors({ items: [] })
+      setShowAdd(false)
     } catch (error) { showAlert(errorText(error)) }
   }
 
@@ -70,7 +95,17 @@ export default function Invoices() {
     } finally { setSharing(false) }
   }
 
+  /** Draft → sent → paid → overdue. Marking an invoice paid records its payment date. */
+  async function handleStatus(invoice: Invoice, status: Invoice['status']) {
+    try {
+      await updateInvoice(invoice.id, status === 'paid'
+        ? { status, paidAt: invoice.paidAt ?? Date.now() }
+        : { status, paidAt: undefined })
+    } catch (error) { showAlert(errorText(error)) }
+  }
+
   const { subtotal, total } = calculateTotal()
+  const projectOptions = projects.filter(project => !form.customerId || project.customerId === form.customerId)
 
   return (
     <div className="space-y-6">
@@ -86,44 +121,59 @@ export default function Invoices() {
       <ExportCsvButton store="invoices" />
 
       {showAdd && (
-        <div className="bg-surface rounded-xl border border-line p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <div className="bg-surface rounded-xl border border-line p-4 sm:p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
           <h2 className="font-semibold text-ink mb-4">{t("Create Invoice")}</h2>
           <DocumentOptions value={form} onChange={patch=>setForm({...form,...patch})} />
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t("Customer *")}</label>
-              <select aria-label={t('Customer')} value={form.customerId} onChange={e => setForm({...form, customerId: e.target.value})} className="w-full px-3 py-2 border border-line-strong rounded-lg text-[13.5px] bg-surface text-ink outline-none transition-colors placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-brand/15">
+
+          <div className="space-y-4 mt-4">
+            <Field label={t('Customer')} required error={errors.customer} hint={t('Who this invoice is for')}>
+              <select aria-label={t('Customer')} value={form.customerId} onChange={e => setForm({...form, customerId: e.target.value, projectId: ''})} className={fieldInputClass}>
                 <option value="">{t("Select customer")}</option>
                 {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
-            </div>
+            </Field>
+
+            <Field label={t('Project')} hint={t('Optional. Used to group revenue by project.')}>
+              <select aria-label={t('Project')} value={form.projectId} onChange={e => setForm({...form, projectId: e.target.value})} className={fieldInputClass} disabled={!projectOptions.length}>
+                <option value="">{t('No project')}</option>
+                {projectOptions.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+              </select>
+            </Field>
 
             <div>
-              <label className="block text-[13px] font-medium text-ink mb-2">{t("Items")}</label>
+              <p className={fieldLabelClass}>{t("Items")}{form.items.length ? '' : ' *'}</p>
+              {errors.itemsError && <p role="alert" className="mb-2 text-[12px] text-serious">{t(errors.itemsError)}</p>}
               {form.items.map((item, idx) => (
-                <div key={idx} className="grid grid-cols-12 gap-2 mb-2">
-                  <input placeholder={t("Description")} value={item.description} onChange={e => {
-                    const newItems = [...form.items]
-                    newItems[idx].description = e.target.value
-                    setForm({...form, items: newItems})
-                  }} className="col-span-6 px-3 py-2 border border-line-strong rounded-lg text-[13.5px] bg-surface text-ink outline-none transition-colors placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-brand/15" />
-                  <input type="number" placeholder={t("Qty")} value={item.quantity} onChange={e => {
-                    const newItems = [...form.items]
-                    newItems[idx].quantity = parseFloat(e.target.value) || 0
-                    setForm({...form, items: newItems})
-                  }} className="col-span-2 px-3 py-2 border border-line-strong rounded-lg text-[13.5px] bg-surface text-ink outline-none transition-colors placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-brand/15" />
-                  <input type="number" placeholder={t("Price")} value={item.unitPrice} onChange={e => {
-                    const newItems = [...form.items]
-                    newItems[idx].unitPrice = parseFloat(e.target.value) || 0
-                    setForm({...form, items: newItems})
-                  }} className="col-span-3 px-3 py-2 border border-line-strong rounded-lg text-[13.5px] bg-surface text-ink outline-none transition-colors placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-brand/15" />
-                  <button onClick={() => {
-                    setForm({...form, items: form.items.filter((_, i) => i !== idx)})
-                  }} aria-label={t("Remove item")} className="col-span-1 text-serious text-[13px]"><X className="w-4 h-4 mx-auto" /></button>
+                <div key={idx} className="mb-3 rounded-lg border border-line p-3 sm:border-0 sm:p-0">
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                    <TextField className="sm:col-span-6" label={t('Description')} required value={item.description} error={errors.items[idx]?.description}
+                      onChange={description => {
+                        const items = [...form.items]
+                        items[idx] = { ...items[idx], description }
+                        setForm({ ...form, items })
+                      }} hint={t('Line description')} placeholder={t('Service or product')} />
+                    <NumberInput className="sm:col-span-2" label={t('Quantity')} required value={item.quantity} min={0}
+                      error={errors.items[idx]?.quantity} hint={t('Quantity')}
+                      onChange={quantity => {
+                        const items = [...form.items]
+                        items[idx] = { ...items[idx], quantity }
+                        setForm({ ...form, items })
+                      }} />
+                    <NumberInput className="sm:col-span-3" label={t('Unit price')} required value={item.unitPrice} min={0}
+                      error={errors.items[idx]?.unitPrice} suffix={form.currency} hint={`${t('Unit price')} (${form.currency})`}
+                      onChange={unitPrice => {
+                        const items = [...form.items]
+                        items[idx] = { ...items[idx], unitPrice }
+                        setForm({ ...form, items })
+                      }} />
+                    <div className="flex items-start justify-end sm:col-span-1 sm:pt-6">
+                      <button onClick={() => setForm({ ...form, items: form.items.filter((_, i) => i !== idx) })}
+                        aria-label={t("Remove item")} className="grid h-12 w-12 place-items-center rounded-lg text-serious hover:bg-serious-50"><X className="w-4 h-4" /></button>
+                    </div>
+                  </div>
                 </div>
               ))}
-              <button onClick={() => setForm({...form, items: [...form.items, { description: '', quantity: 1, unitPrice: 0 }]})} className="text-[13px] text-brand hover:text-brand-700">{t("+ Add item")}</button>
+              <button onClick={() => setForm({...form, items: [...form.items, emptyItem()]})} className="text-[13px] font-semibold text-brand hover:text-brand-700">{t("+ Add item")}</button>
             </div>
 
             <div className="bg-canvas p-4 rounded-lg">
@@ -137,15 +187,14 @@ export default function Invoices() {
               </div>
             </div>
 
-            <div>
-              <label className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t("Notes")}</label>
-              <textarea value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} placeholder={t("Thank you for your business!")} className="w-full px-3 py-2 border border-line-strong rounded-lg text-[13.5px] bg-surface text-ink outline-none transition-colors placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-brand/15" rows={3} />
-            </div>
+            <Field label={t('Notes')} hint={t('Printed on the invoice')}>
+              <textarea value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} placeholder={t("Thank you for your business!")} className={fieldInputClass} rows={3} />
+            </Field>
           </div>
 
           <div className="flex gap-2 mt-6">
-            <button onClick={handleAdd} className="bg-brand text-white px-6 py-2 rounded-lg text-[13px] font-semibold transition-all active:scale-[0.98] disabled:opacity-40 shadow-sm">{t("Create Invoice")}</button>
-            <button onClick={() => setShowAdd(false)} className="bg-canvas text-ink px-6 py-2 rounded-lg text-[13px]">{t("Cancel")}</button>
+            <button onClick={handleAdd} className="bg-brand text-white px-6 py-2.5 rounded-lg text-[13px] font-semibold transition-all active:scale-[0.98] disabled:opacity-40 shadow-sm">{t("Create Invoice")}</button>
+            <button onClick={() => { setShowAdd(false); setErrors({ items: [] }) }} className="bg-canvas text-ink px-6 py-2.5 rounded-lg text-[13px]">{t("Cancel")}</button>
           </div>
         </div>
       )}
@@ -162,32 +211,40 @@ export default function Invoices() {
               const customer = customers.find(c => c.id === invoice.customerId)
               return (
                 <div key={invoice.id} className="p-4 hover:bg-canvas">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium text-[13px] text-ink">{invoice.number}</p>
-                      <details className="mt-2"><summary className="text-[12px] cursor-pointer">{t('Document options')}</summary><DocumentOptions value={invoice} onChange={patch=>void updateInvoice(invoice.id,patch).catch(e=>showAlert(errorText(e)))}/></details>
-                      <p className="text-[12px] text-muted mt-0.5">{customer?.name || t("Unknown")} • {formatDate(invoice.occurredAt || invoice.createdAt,true,invoice.language)}</p>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium text-[13px] text-ink break-words">{invoice.number}</p>
+                      <p className="text-[12px] text-muted mt-0.5 break-words">{[customer?.name || t("Unknown"), formatDate(invoice.occurredAt || invoice.createdAt,true,invoice.language)].join(' • ')}</p>
                       <span className={`inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full ${
                         invoice.status === 'paid' ? 'bg-good-50 text-emerald-700' :
+                        invoice.status === 'overdue' ? 'bg-serious-50 text-serious' :
                         invoice.status === 'sent' ? 'bg-brand-100 text-brand-700' :
                         'bg-canvas text-ink'
                       }`}>
                         {t(invoice.status)}
                       </span>
+                      <label className="mt-2 block max-w-[190px]">
+                        <span className="block text-[11px] font-semibold text-muted mb-1 uppercase tracking-[0.06em]">{t('Status')}</span>
+                        <select aria-label={`${invoice.number} — ${t('Status')}`} value={invoice.status} onChange={e => void handleStatus(invoice, e.target.value as Invoice['status'])} className="w-full min-h-11 rounded-lg border border-line-strong bg-surface px-2 py-1.5 text-[14px] text-ink outline-none focus:border-brand">
+                          {(['draft', 'sent', 'paid', 'overdue'] as const).map(status => <option key={status} value={status}>{t(status)}</option>)}
+                        </select>
+                      </label>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <div className="text-end me-2">
-                        <p className="font-bold text-[13px] text-ink">{money(invoice.total,invoice.currency,false,invoice.language)}</p>
-                      </div>
-                      <button disabled={sharing} onClick={() => handleShare(invoice)} className="p-2 hover:bg-canvas rounded-lg" title={t("Download PDF")}>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <p className="tnum font-bold text-[13px] text-ink">{money(invoice.total,invoice.currency,false,invoice.language)}</p>
+                      <button disabled={sharing} onClick={() => handleShare(invoice)} className="p-2 hover:bg-canvas rounded-lg" title={t("Download PDF")} aria-label={t('Download PDF')}>
                         <Download className="w-4 h-4 text-muted" />
                       </button>
-                      <button disabled={sharing} onClick={() => handleShare(invoice)} className="p-2 hover:bg-canvas rounded-lg" title={t("Share")}>
+                      <button disabled={sharing} onClick={() => handleShare(invoice)} className="p-2 hover:bg-canvas rounded-lg" title={t("Share")} aria-label={t('Share')}>
                         <Share2 className="w-4 h-4 text-muted" />
                       </button>
-                      <button onClick={() => deleteInvoice(invoice.id)} className="text-[12px] text-serious hover:text-serious px-2 py-1">{t("Delete")}</button>
+                      <button onClick={() => deleteInvoice(invoice.id)} className="text-[12px] text-serious px-2 py-1">{t("Delete")}</button>
                     </div>
                   </div>
+                  <details className="mt-2">
+                    <summary className="text-[12px] cursor-pointer text-muted">{t('Document options')}</summary>
+                    <div className="mt-3"><DocumentOptions value={invoice} onChange={patch=>void updateInvoice(invoice.id,patch).catch(e=>showAlert(errorText(e)))} /></div>
+                  </details>
                 </div>
               )
             })}

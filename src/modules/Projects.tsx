@@ -1,28 +1,34 @@
 import { showAlert } from '../lib/dialogs'
-import { errorText } from '../i18n'
+import { errorText, useI18n } from '../i18n'
 import { number } from '../lib/format'
-import { t } from '../i18n'
 import { useState } from 'react'
 import { useFatorati } from '../store/useFatorati'
 import { Plus } from 'lucide-react'
+import NumberInput from '../components/NumberInput'
+import { Field, TextField, fieldInputClass } from '../components/Field'
+import { getPreferences } from '../lib/preferences'
 
 export default function Projects() {
+  const { t } = useI18n()
   const { projects, customers, addProject, deleteProject } = useFatorati()
   const [showAdd, setShowAdd] = useState(false)
-  const [form, setForm] = useState({ name: '', customerId: '', description: '', budget: 0 })
+  const [errors, setErrors] = useState<{ name?: string }>({})
+  const [form, setForm] = useState({ name: '', customerId: '', description: '', budget: null as number | null })
+  const currency = getPreferences().defaultCurrency
 
   async function handleAdd() {
     try {
-    if (!form.name.trim()) return
-    await addProject({
-      name: form.name.trim(),
-      customerId: form.customerId,
-      description: form.description.trim(),
-      status: 'planning',
-      budget: form.budget,
-    })
-    setForm({ name: '', customerId: '', description: '', budget: 0 })
-    setShowAdd(false)
+      if (!form.name.trim()) { setErrors({ name: 'Required field' }); return }
+      setErrors({})
+      await addProject({
+        name: form.name.trim(),
+        customerId: form.customerId,
+        description: form.description.trim(),
+        status: 'planning',
+        budget: form.budget ?? 0,
+      })
+      setForm({ name: '', customerId: '', description: '', budget: null })
+      setShowAdd(false)
     } catch (error) { showAlert(errorText(error)) }
   }
 
@@ -38,20 +44,22 @@ export default function Projects() {
       </div>
 
       {showAdd && (
-        <div className="bg-surface rounded-xl border border-line p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <div className="bg-surface rounded-xl border border-line p-4 sm:p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
           <h2 className="font-semibold text-ink mb-4">{t("Add Project")}</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <input placeholder={t("Project name *")} value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="px-3 py-2 border border-line-strong rounded-lg text-[13.5px] bg-surface text-ink outline-none transition-colors placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-brand/15" />
-            <select value={form.customerId} onChange={e => setForm({...form, customerId: e.target.value})} className="px-3 py-2 border border-line-strong rounded-lg text-[13.5px] bg-surface text-ink outline-none transition-colors placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-brand/15">
-              <option value="">{t("Select customer")}</option>
-              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            <input type="number" placeholder={t("Budget")} value={form.budget} onChange={e => setForm({...form, budget: parseFloat(e.target.value) || 0})} className="px-3 py-2 border border-line-strong rounded-lg text-[13.5px] bg-surface text-ink outline-none transition-colors placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-brand/15" />
-            <input placeholder={t("Description")} value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="px-3 py-2 border border-line-strong rounded-lg text-[13.5px] bg-surface text-ink outline-none transition-colors placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-brand/15" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            <TextField label={t('Project name')} required value={form.name} error={errors.name} onChange={name => setForm({...form, name})} placeholder={t('Website redesign')} />
+            <Field label={t('Customer')} hint={t('Optional project owner')}>
+              <select aria-label={t('Customer')} value={form.customerId} onChange={e => setForm({...form, customerId: e.target.value})} className={fieldInputClass}>
+                <option value="">{t('No customer')}</option>
+                {customers.map(customer => <option key={customer.id} value={customer.id}>{customer.name}</option>)}
+              </select>
+            </Field>
+            <NumberInput label={t('Budget')} value={form.budget} min={0} suffix={currency} hint={`${t('Budget')} (${currency})`} onChange={budget => setForm({...form, budget})} />
+            <TextField className="md:col-span-2" label={t('Description')} value={form.description} onChange={description => setForm({...form, description})} hint={t('Internal project notes')} placeholder={t('Scope, deadlines, contacts')} />
           </div>
           <div className="flex gap-2 mt-4">
-            <button onClick={handleAdd} className="bg-brand text-white px-3.5 py-2 rounded-lg text-[13px] font-semibold transition-all active:scale-[0.98] disabled:opacity-40 shadow-sm">{t("Save")}</button>
-            <button onClick={() => setShowAdd(false)} className="bg-canvas text-ink px-4 py-2 rounded-lg text-[13px]">{t("Cancel")}</button>
+            <button onClick={handleAdd} className="bg-brand text-white px-3.5 py-2.5 rounded-lg text-[13px] font-semibold transition-all active:scale-[0.98] disabled:opacity-40 shadow-sm">{t("Save")}</button>
+            <button onClick={() => { setShowAdd(false); setErrors({}) }} className="bg-canvas text-ink px-4 py-2.5 rounded-lg text-[13px]">{t("Cancel")}</button>
           </div>
         </div>
       )}
@@ -66,12 +74,12 @@ export default function Projects() {
             {projects.map((project) => {
               const customer = customers.find(c => c.id === project.customerId)
               return (
-                <div key={project.id} className="p-4 flex items-center justify-between hover:bg-canvas">
-                  <div>
-                    <p className="font-medium text-[13px] text-ink">{project.name}</p>
-                    <p className="text-[12px] text-muted mt-0.5">{customer?.name || t("No customer")} • {t(project.status)}</p>
+                <div key={project.id} className="p-4 flex items-center justify-between gap-3 hover:bg-canvas">
+                  <div className="min-w-0">
+                    <p className="font-medium text-[13px] text-ink break-words">{project.name}</p>
+                    <p className="text-[12px] text-muted mt-0.5 break-words">{customer?.name || t("No customer")} • {t(project.status)}</p>
                   </div>
-                  <button onClick={() => deleteProject(project.id)} className="text-[12px] text-serious hover:text-serious px-2 py-1">{t("Delete")}</button>
+                  <button onClick={() => deleteProject(project.id)} className="text-[12px] text-serious px-2 py-1 shrink-0">{t("Delete")}</button>
                 </div>
               )
             })}

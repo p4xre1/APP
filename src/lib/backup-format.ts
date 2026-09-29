@@ -170,7 +170,8 @@ export function migrateBackup(input: unknown): FatoratiBackup {
   }) as Record<string, unknown>
   if(value.version === '1.0.0') {
     const settings = Array.isArray(value.settings) ? value.settings[0] : undefined
-    const currency = settings?.currency || 'USD'
+    // v1 backups without a currency follow the app default (MAD for new installs).
+    const currency = settings?.currency || defaultPreferences.defaultCurrency
     if(!validCurrency(currency)) throw new Error('Invalid backup structure')
     value.security = {appLock:true,biometricEnabled:false}
     value.preferences = {...defaultPreferences, language: settings?.language || 'en', defaultCurrency:currency, theme:settings?.theme || 'system', updatedAt:0}

@@ -28,5 +28,5 @@ export function useLastBackup() {
       document.removeEventListener('visibilitychange', refresh)
     }
   }, [])
-  return { lastBackup, loaded, error, overdue: loaded && (lastBackup === null || now - lastBackup >= 7 * 86400_000) }
+  return { lastBackup, loaded, error, now, overdue: loaded && (lastBackup === null || now - lastBackup >= 7 * 86400_000) }
 }

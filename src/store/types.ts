@@ -13,6 +13,7 @@ export type ModuleKey =
   | 'estimates'
   | 'expenses'
   | 'products'
+  | 'calendar'
   | 'reports'
   | 'settings'
 
@@ -79,6 +80,8 @@ export interface Invoice {
   tax: number
   total: number
   status: 'draft' | 'sent' | 'paid' | 'overdue'
+  /** UTC milliseconds when the invoice was marked paid; used as its payment date. */
+  paidAt?: number
   issueDate: string
   dueDate: string
   notes: string

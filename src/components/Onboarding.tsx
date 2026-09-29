@@ -160,6 +160,8 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                 </label>
                 <input
                   type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder={t('Phone example')}
@@ -174,6 +176,8 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                 </label>
                 <input
                   type="email"
+                  inputMode="email"
+                  autoComplete="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder={t("owner@business.com")}

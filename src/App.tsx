@@ -24,6 +24,7 @@ const Expenses = lazy(() => import('./modules/Expenses'))
 const Products = lazy(() => import('./modules/Products'))
 const Settings = lazy(() => import('./modules/Settings'))
 const Reports = lazy(() => import('./modules/Reports'))
+const Calendar = lazy(() => import('./modules/Calendar'))
 
 function Fallback() {
   return (
@@ -70,6 +71,8 @@ export default function App() {
         return <Expenses />
       case 'products':
         return <Products />
+      case 'calendar':
+        return <Calendar />
       case 'reports':
         return <Reports />
       case 'settings':

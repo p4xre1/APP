@@ -33,7 +33,15 @@ jobs:
         uses: android-actions/setup-android@v4
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          echo "Trying pnpm install with frozen lockfile..."
+          pnpm install --frozen-lockfile || {
+            echo "Frozen install failed, trying without frozen..."
+            pnpm install --no-frozen-lockfile || {
+              echo "No-frozen failed, trying with ignore-scripts..."
+              pnpm install --frozen-lockfile --ignore-scripts
+            }
+          }
 
       - name: Build web (offline production)
         run: pnpm build

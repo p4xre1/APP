@@ -51,18 +51,26 @@ jobs:
           cd android
           chmod +x gradlew
           echo "sdk.dir=$ANDROID_HOME" > local.properties
-          ./gradlew assembleDebug --no-daemon
-          ls -lh app/build/outputs/apk/debug/ || true
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          java -version
+          ls -lh gradle/wrapper/
+          cat gradle/wrapper/gradle-wrapper.properties
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee ../gradle.log
+          echo "Exit: ${PIPESTATUS[0]}"
           find . -name "*.apk" -type f -exec ls -lh {} \; || echo "No APK"
-          mkdir -p ../artifacts
-          find app/build -name "*.apk" -type f -exec cp -v {} ../artifacts/ \; || true
+          ls -lh app/build/outputs/apk/debug/ || true
+
+      - name: Upload gradle logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-logs
+          path: gradle.log
+          retention-days: 7
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: fatorati-offline-apk
-          path: |
-            android/app/build/outputs/apk/debug/app-debug.apk
-            artifacts/
+          path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
-          if-no-files-found: error

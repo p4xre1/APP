@@ -32,8 +32,8 @@ Appearance/language/time preferences are intentionally non-secret in Capacitor P
 - Offline dictionaries: English, Arabic, French, Spanish and Portuguese. Language pickers are on the lock/onboarding screen and in Settings. Unsupported phone languages default to English.
 - Arabic sets `html.lang`/`dir`, uses logical spacing/alignment and mirrored calendar chevrons. App dialogs, validation messages, CSV headers and invoice/estimate PDF labels are localized. Business names/descriptions entered by users are not automatically translated. Android's own share/picker/biometric chrome follows OS conventions.
 - Western or Arabic-Indic digits use `Intl.NumberFormat`.
-- Currency picker uses `Intl.supportedValuesOf('currency')` and localized `Intl.DisplayNames`, with search. The exact list reflects the phone WebView's bundled Intl/CLDR version; no list or names are fetched online.
-- A business default currency is chosen at onboarding and editable in Settings. Invoices, estimates and expenses retain their own currency. Amounts are quantized consistently to that currency's minor-unit precision; integer minor-unit/BigInt arithmetic is used for rounding and sums. For example JPY has zero decimals, KWD three.
+- Currency picker uses `Intl.supportedValuesOf('currency')` merged with a required offline set (MAD, EUR, USD, GBP, AED, SAR, DZD, TND, XOF, CAD) so these are always offered, plus localized `Intl.DisplayNames`, search and a formatting example. Symbols and decimal places come from the WebView's bundled Intl/CLDR; no list, name or rate is fetched online.
+- A business default currency is chosen at onboarding (MAD for new users) and editable in Settings. Records without a currency are read as the default currency, so old data stays valid. Invoices, estimates and expenses retain their own currency. Amounts are quantized consistently to that currency's minor-unit precision; integer minor-unit/BigInt arithmetic is used for rounding and sums. For example JPY has zero decimals, KWD three.
 - Document options choose currency, language, an optional manual conversion rate and color/monochrome PDF output. A manual rate means **default-currency units per one document-currency unit**, and stores its target currency. Changing the business default does not silently reuse a rate for the wrong target.
 - Reports and dashboard totals separate currencies. Reports also show a converted net total using entered rates, clearly marking documents omitted for missing rates. No online rates.
 - Estimates now have a small creation form, document options and PDF export in the existing screen style.
@@ -65,7 +65,7 @@ Version **1.0.0** JSON and encrypted backups remain importable. Migration fills 
 
 An import uses one transaction spanning **all eight stores plus metadata**, stronger than separate per-store transactions. Encryption is prepared before opening that transaction to avoid IndexedDB auto-close during crypto awaits. A failure leaves the whole import unchanged.
 
-The last-backup Preferences date records successful share handoff, not proof of delivery. Failed/canceled shares reported by Capacitor do not reset it; CSV/PDF/imports do not either. The dashboard reminds after seven days or when no backup has been recorded. Native exports use unique Cache folders and FileProvider; only non-native test/browser execution uses `<a download>`.
+The last-backup Preferences date records successful share handoff, not proof of delivery. Failed/canceled shares reported by Capacitor do not reset it; CSV/PDF/imports do not either. The dashboard banner reminds every 3, 7, 14 or 30 days (or when the reminder is turned off, never), when there is no backup yet, or when many records changed since the last backup; dismissing it hides it for three days. The frequency and the last-backup date are shown in Settings -> Backup & Restore. Native exports use unique Cache folders and FileProvider; only non-native test/browser execution uses `<a download>`.
 
 ## Development/build
 
@@ -116,6 +116,23 @@ pnpm test:browser
 ```
 
 Use `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` for an existing Chromium and `FATORATI_TEST_URL` for a different test origin. Test files/screenshots/PDFs are under ignored `.tmp-ui/`. The harness uses two independent browser profiles and asserts no page/console errors. It is not part of the Android runtime.
+
+## Phone-test fixes (2026-09-29)
+
+Reported on a physical Android build and fixed without removing the existing design, security model or tests.
+
+1. **Number fields can be cleared.** `src/lib/number-input.ts` + `src/components/NumberInput.tsx` keep the raw text while typing; empty means "no value yet" (null), never 0. `type="text"` with `inputMode="decimal"` (`numeric` for Stock), "." or "," as the decimal separator, letters blocked, Arabic-Indic digits normalised, select-all on focus, format on blur, empty stays empty. Required values are validated on save with the error shown under the field. Used by Invoices (quantity, unit price), Expenses (amount), Projects (budget), Products (unit price, stock), Estimates (quantity, unit price) and the manual exchange rate in Document Options.
+2. **Every input has a visible label** (`src/components/Field.tsx`) plus short hints such as Amount (MAD), Quantity, Unit price (MAD); placeholders remain examples only.
+3. **Client form on a phone:** all fields full width, at least 48 px high, 16 px text (no zoom), phone uses `type="tel"`/`inputMode="tel"`, logical start/end spacing so LTR and RTL look the same at 360 px.
+4. **Revenue explained:** Total Revenue = invoices with the paid status; Pending = **sent + overdue** (overdue shown as its own red line with amount and count); drafts are never counted. Each card has a one-line definition with its invoice count, is tappable, and opens the list behind the number (number, client, project, date, amount, status) with the matching total at the bottom; tapping an invoice opens it. The details view groups by Client, Project (only when invoices are linked to projects) or Month with each amount and its percentage. A "?" next to the revenue title explains all of this.
+5. **Currencies:** MAD (default for new users), EUR, USD, GBP, AED, SAR, DZD, TND, XOF and CAD are always offered and searchable even if a WebView ships a reduced Intl currency list; symbols and decimal places come from Intl/CLDR, with a formatting example in the picker. Records without a currency stay valid and are read as the default currency. Currency appears in CSV (Currency column) and in PDF totals (symbol plus code). **No automatic conversion was added.**
+6. **Calendar screen** in the main navigation: month view of invoice due dates, estimate expiry dates and payment dates (invoices marked paid), tap a day for its items, overdue items in red, per-currency day totals, fully offline.
+7. **Shareable revenue card:** a Share button on the revenue screen picks this month, last month, this year or a custom range and generates a 1080x1350 PNG with the period, total revenue, invoice count and the business name/logo, then hands it to the Android share sheet. Arabic follows RTL; the card is drawn locally and nothing is uploaded.
+8. **Backup reminder:** a dismissible banner appears when the last backup is older than the chosen frequency, when there is no backup yet, or when many records changed since the last backup. Dismissing hides it for several days. Settings (Backup & Restore) choose the frequency or turn it off and show "Last backup:".
+
+All new strings exist in the five dictionaries (en, ar, fr, es, pt). New tests cover the number field (including emptying a real DOM input), the pending/overdue calculation, grouping percentages, calendar events, reminder timing and the currency list; the earlier tests were kept.
+
+Verification in this sandbox: `pnpm exec tsc --noEmit`, `pnpm test` (61 tests) and `pnpm build` pass; the Android APK is produced by the existing GitHub workflow. A 360 px browser/screenshot check and on-device checks (share sheet, RTL rendering, notifications-free offline behaviour) still require a device or emulator, as before.
 
 ## FatooraLaw design reference and verification (2026-09-29)
 

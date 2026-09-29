@@ -32,15 +32,13 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
 
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.11.1
+
       - name: Install dependencies
-        run: |
-          for i in 1 2 3; do
-            echo "Install attempt $i"
-            pnpm install --frozen-lockfile && break
-            echo "Failed attempt $i"
-            if [ $i -eq 3 ]; then exit 1; fi
-            sleep 5
-          done
+        run: pnpm install --frozen-lockfile
 
       - name: Build web (offline production)
         run: pnpm build
@@ -53,24 +51,22 @@ jobs:
           cd android
           chmod +x gradlew
           echo "sdk.dir=$ANDROID_HOME" > local.properties
-          echo "Building APK with retry..."
-          for i in 1 2 3; do
-            echo "=== Attempt $i ==="
-            ./gradlew assembleDebug --no-daemon --stacktrace
-            if [ $? -eq 0 ]; then
-              echo "Build succeeded on attempt $i"
-              break
-            fi
-            echo "Build failed on attempt $i"
-            if [ $i -eq 3 ]; then
-              echo "Build failed after 3 attempts"
-              exit 1
-            fi
-            sleep 10
-          done
-          echo "=== APK outputs ==="
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          java -version
+          ls -lh gradle/wrapper/
+          cat gradle/wrapper/gradle-wrapper.properties
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee ../gradle.log
+          echo "Exit: ${PIPESTATUS[0]}"
+          find . -name "*.apk" -type f -exec ls -lh {} \; || echo "No APK"
           ls -lh app/build/outputs/apk/debug/ || true
-          find app/build -name "*.apk" -type f -exec ls -lh {} \; || echo "No APK found"
+
+      - name: Upload gradle logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-logs
+          path: gradle.log
+          retention-days: 7
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4

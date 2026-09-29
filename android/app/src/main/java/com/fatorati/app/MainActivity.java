@@ -1,0 +1,5 @@
+package com.fatorati.app;
+
+import com.getcapacitor.BridgeActivity;
+
+public class MainActivity extends BridgeActivity {}

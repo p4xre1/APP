@@ -18,10 +18,11 @@ jobs:
         with:
           version: 10.34.3
 
-      - name: Setup Node.js 20
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+          cache: 'pnpm'
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -32,15 +33,20 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
 
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
       - name: Install dependencies
-        run: |
-          for i in 1 2 3; do
-            echo "Install attempt $i"
-            pnpm install --frozen-lockfile && break
-            echo "Failed attempt $i"
-            if [ $i -eq 3 ]; then exit 1; fi
-            sleep 5
-          done
+        run: pnpm install --frozen-lockfile
 
       - name: Build web (offline production)
         run: pnpm build

@@ -10,11 +10,13 @@ import { useFatorati } from '../store/useFatorati'
 import { loadBackupFile } from '../lib/db'
 import { PasswordRequiredError } from '../lib/backup-format'
 import type { ImportMode } from '../lib/backup-format'
-import { useLastBackup } from '../lib/useLastBackup'
+import { useBackupReminder } from './BackupReminder'
+import { reminderFrequencies, saveReminderSettings, type ReminderFrequency } from '../lib/backup-reminder'
 
 export default function BackupPanel() {
   const { exportBackup, importBackup } = useFatorati()
-  const { lastBackup, loaded, error } = useLastBackup()
+  const { lastBackup, loaded, state, settings, refresh } = useBackupReminder()
+  const [savingReminder, setSavingReminder] = useState(false)
   const [busy, setBusy] = useState(false)
   const [mode, setMode] = useState<ImportMode>('merge')
   const [password, setPassword] = useState('')
@@ -73,7 +75,27 @@ export default function BackupPanel() {
     <div className="bg-surface rounded-xl border border-line p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
       <h2 className="text-[14px] font-bold text-ink mb-4 flex items-center gap-2"><Download className="w-5 h-5" />{t("Backup & Restore")}</h2>
       <p className="text-[13px] text-muted mb-3">{t("Your data lives only on this phone. Uninstalling the app deletes it. Export a backup regularly.")}</p>
-      <p className="text-[12px] text-muted mb-4">{t("Last backup date:")}{!loaded ? t("Loading...") : error ? t("Unavailable") : lastBackup ? formatDate(lastBackup,true) : t("Never")}</p>
+      <div className="mb-4 rounded-lg border border-line p-4">
+        <h3 className="font-medium text-ink text-[13px]">{t('Backup reminder')}</h3>
+        <p className="text-[12px] text-muted mt-1">{t('Last backup:')} {!loaded ? t('Loading...') : lastBackup ? formatDate(lastBackup, true) : t('Never')}</p>
+        <label className="mt-3 block">
+          <span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t('Remind me about backups')}</span>
+          <select
+            aria-label={t('Remind me about backups')}
+            value={settings.frequency}
+            disabled={savingReminder}
+            onChange={async event => {
+              setSavingReminder(true)
+              try { await saveReminderSettings({ frequency: event.target.value as ReminderFrequency, dismissedUntil: 0 }); await refresh() }
+              finally { setSavingReminder(false) }
+            }}
+            className={inputClass}
+          >
+            {reminderFrequencies.map(frequency => <option key={frequency} value={frequency}>{t(`reminder.${frequency}`)}</option>)}
+          </select>
+        </label>
+        <p className="text-[12px] text-muted mt-2">{state.due ? t('The reminder is showing now.') : t('The reminder is hidden until it is due.')}</p>
+      </div>
       <div className="space-y-4">
         <div className="bg-brand-50 border border-brand/20 rounded-lg p-4">
           <h3 className="font-medium text-ink text-[13px]">{t("Export Backup")}</h3>

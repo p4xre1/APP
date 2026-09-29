@@ -56,7 +56,8 @@ export async function shareInvoicePdf(invoice: Invoice | Estimate, business: Bus
     `${tr('Status')}: ${tr(invoice.status)}`, '', tr('Items'),
     ...invoice.items.flatMap(item => [item.description, `${number(item.quantity,language)} × ${money(item.unitPrice,currency,false,language)} = ${money(item.total,currency,false,language)}`, '']),
     `${tr('Subtotal')}: ${money(invoice.subtotal,currency,false,language)}`, `${tr('Tax')}: ${money(invoice.tax,currency,false,language)}`,
-    `${tr('Total')}: ${money(invoice.total,currency,false,language)}`, '', tr('Notes'), invoice.notes,
+    // The currency code always appears next to the total, never only the symbol.
+    `${tr('Total')}: ${money(invoice.total,currency,false,language)} (${currency})`, '', tr('Notes'), invoice.notes,
   ].join('\n')
   // Wrap long descriptions/notes and add pages instead of clipping invoices.
   for (const paragraph of content.split(/\r?\n/)) {

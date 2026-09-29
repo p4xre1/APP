@@ -4,6 +4,11 @@ import { StatusBar, Style } from '@capacitor/status-bar'
 
 export const languages = ['en', 'ar', 'fr', 'es', 'pt'] as const
 export type Language = typeof languages[number]
+/**
+ * Currencies the app must always offer, even if an older phone WebView ships a
+ * reduced Intl currency list. Symbols and decimal places come from Intl (CLDR).
+ */
+export const REQUIRED_CURRENCIES = ['MAD', 'EUR', 'USD', 'GBP', 'AED', 'SAR', 'DZD', 'TND', 'XOF', 'CAD'] as const
 export interface DisplayPreferences {
   language: Language
   digits: 'latn' | 'arab'
@@ -25,16 +30,23 @@ export const PREFERENCE_KEY = 'fatorati.display.v2'
 const phoneLanguage = typeof navigator === 'undefined' ? 'en' : navigator.language.split('-')[0]
 export const defaultPreferences: DisplayPreferences = {
   language: languages.includes(phoneLanguage as Language) ? phoneLanguage as Language : 'en',
-  digits: 'latn', defaultCurrency: 'USD', dateFormat: 'auto', timeFormat: '24h',
+  digits: 'latn', defaultCurrency: 'MAD', dateFormat: 'auto', timeFormat: '24h',
   timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', firstDay: 1,
   hijri: false, theme: 'light', accent: '#2563eb', spacing: 'comfortable',
   autoLock: 5, secureScreen: true, pdfColor: true, updatedAt: 0,
 }
 export function supportedValues(key: 'currency' | 'timeZone'): string[] {
-  return Intl.supportedValuesOf(key)
+  if (key === 'timeZone') return Intl.supportedValuesOf('timeZone')
+  return currencyCodes()
+}
+/** Every offered currency: the WebView list plus the required offline set, never fetched online. */
+export function currencyCodes(): string[] {
+  let available: string[] = []
+  try { available = Intl.supportedValuesOf('currency') } catch { available = [] }
+  return [...new Set([...REQUIRED_CURRENCIES, ...available].filter(code => /^[A-Z]{3}$/.test(code)))].sort()
 }
 export function validCurrency(code: unknown): code is string {
-  return typeof code === 'string' && /^[A-Z]{3}$/.test(code) && (supportedValues('currency').includes(code) || ['XTS', 'XXX'].includes(code))
+  return typeof code === 'string' && /^[A-Z]{3}$/.test(code) && (currencyCodes().includes(code) || ['XTS', 'XXX'].includes(code))
 }
 export function validPreferences(value: unknown): value is DisplayPreferences {
   if (!value || typeof value !== 'object') return false

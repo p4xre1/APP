@@ -1,7 +1,7 @@
 import { showAlert } from '../lib/dialogs'
 import { errorText } from '../i18n'
 import { t, usePreferences } from '../i18n'
-import { savePreferences, supportedValues } from '../lib/preferences'
+import { savePreferences, currencyCodes } from '../lib/preferences'
 import PreferencesPanel from '../components/PreferencesPanel'
 import SecurityPanel from '../components/SecurityPanel'
 /**
@@ -141,7 +141,7 @@ export default function Settings() {
               <div className="flex justify-between">
                 <span className="text-muted">{t('Currency')}</span>
                 <select aria-label={`${t('App Info')} — ${t('Currency')}`} value={prefs.defaultCurrency} onChange={e=>void handleCurrencyChange(e.target.value)} className="text-[13.5px] border border-line-strong rounded px-2 py-1 bg-surface text-ink outline-none transition-colors placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-brand/15">
-                  {supportedValues('currency').map(code=><option key={code} value={code}>{code}</option>)}
+                  {currencyCodes().map(code=><option key={code} value={code}>{code}</option>)}
                 </select>
               </div>
 

@@ -53,9 +53,22 @@ jobs:
           cd android
           chmod +x gradlew
           echo "sdk.dir=$ANDROID_HOME" > local.properties
-          echo "Building APK..."
-          ./gradlew assembleDebug --no-daemon --stacktrace
-          echo "APK outputs:"
+          echo "Building APK with retry..."
+          for i in 1 2 3; do
+            echo "=== Attempt $i ==="
+            ./gradlew assembleDebug --no-daemon --stacktrace
+            if [ $? -eq 0 ]; then
+              echo "Build succeeded on attempt $i"
+              break
+            fi
+            echo "Build failed on attempt $i"
+            if [ $i -eq 3 ]; then
+              echo "Build failed after 3 attempts"
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "=== APK outputs ==="
           ls -lh app/build/outputs/apk/debug/ || true
           find app/build -name "*.apk" -type f -exec ls -lh {} \; || echo "No APK found"
 

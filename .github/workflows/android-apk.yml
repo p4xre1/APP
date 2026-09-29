@@ -33,7 +33,17 @@ jobs:
         uses: android-actions/setup-android@v4
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          for i in 1 2 3; do
+            echo "=== Install attempt $i ==="
+            pnpm install --frozen-lockfile && break
+            echo "Install failed on attempt $i"
+            if [ $i -eq 3 ]; then
+              echo "Install failed after 3 attempts"
+              exit 1
+            fi
+            sleep 5
+          done
 
       - name: Build web (offline production)
         run: pnpm build
@@ -46,22 +56,12 @@ jobs:
           cd android
           chmod +x gradlew
           echo "sdk.dir=$ANDROID_HOME" > local.properties
-          cat local.properties
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          java -version
-          ls -lh gradle/wrapper/
-          cat gradle/wrapper/gradle-wrapper.properties
-          echo "Building APK..."
           ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee ../gradle.log
-          echo "Exit code: ${PIPESTATUS[0]}"
-          echo "=== Finding APKs ==="
-          find . -type f -name "*.apk" | xargs ls -lh 2>&1 || echo "No APK found"
-          ls -lhR app/build/outputs/ 2>&1 | head -n 100 || echo "No outputs"
-          echo "=== Copying APK ==="
+          echo "Exit: ${PIPESTATUS[0]}"
+          find . -name "*.apk" -type f -exec ls -lh {} \; || echo "No APK"
           mkdir -p ../artifacts
-          find app/build -name "*.apk" -type f -exec cp -v {} ../artifacts/ \; || echo "No APK to copy"
+          find app/build -name "*.apk" -type f -exec cp -v {} ../artifacts/ \; || true
           ls -lh ../artifacts/ || true
-          ls -lh app/build/outputs/apk/debug/ || true
 
       - name: Upload gradle logs
         if: always()

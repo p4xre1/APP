@@ -18,3 +18,8 @@ logs/
 # beside it.
 /.plugins/
 /.opencode-skills/
+
+# Release signing secrets
+*.jks
+*.keystore
+keystore.properties

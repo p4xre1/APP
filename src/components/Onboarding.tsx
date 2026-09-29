@@ -1,3 +1,10 @@
+import { isUnlocked, sessionGuard } from '../lib/vault'
+import { hasPickedBackup, chooseLogoFile, takePickedLogo, subscribePickedLogo } from '../lib/backup-picker'
+import { errorText } from '../i18n'
+import { t } from '../i18n'
+import LanguagePicker from './LanguagePicker'
+import CurrencyPicker from './CurrencyPicker'
+import { getPreferences, savePreferences } from '../lib/preferences'
 /**
  * Fatorati Offline - Onboarding
  * Welcome to Fatorati - Set up your business to get started
@@ -5,7 +12,8 @@
  * No account required - 100% Local • Offline
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import BackupPanel from './BackupPanel'
 import type { FormEvent } from 'react'
 import { Loader2, Building2, User, Phone, Mail, MapPin, Image as ImageIcon } from 'lucide-react'
 
@@ -18,10 +26,12 @@ interface OnboardingProps {
     address: string
     city: string
     logo?: string
+    currency: string
   }) => Promise<void>
 }
 
 export default function Onboarding({ onComplete }: OnboardingProps) {
+  const [currency, setCurrency] = useState(getPreferences().defaultCurrency)
   const [businessName, setBusinessName] = useState('')
   const [ownerName, setOwnerName] = useState('')
   const [phone, setPhone] = useState('')
@@ -34,18 +44,21 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
 
   const canSubmit = businessName.trim() && ownerName.trim() && !submitting
 
-  function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
+  useEffect(() => {
+    const receive = () => { if (!isUnlocked()) return; const file=takePickedLogo(); if(file)handleLogoFile(file) }
+    receive(); return subscribePickedLogo(receive)
+  }, [])
+  function handleLogoFile(file: File) {
+    const guard = sessionGuard()
     
     if (file.size > 2 * 1024 * 1024) {
-      setError('Logo must be less than 2MB')
+      setError(t("Logo must be less than 2MB"))
       return
     }
 
     const reader = new FileReader()
     reader.onload = () => {
-      setLogo(reader.result as string)
+      try { guard(); setLogo(reader.result as string) } catch { /* Locked while reading. */ }
     }
     reader.readAsDataURL(file)
   }
@@ -58,7 +71,9 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     setError(null)
 
     try {
+      await savePreferences({defaultCurrency: currency})
       await onComplete({
+        currency,
         name: businessName.trim(),
         ownerName: ownerName.trim(),
         phone: phone.trim(),
@@ -68,181 +83,163 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
         logo,
       })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save business info')
+      setError(errorText(err))
       setSubmitting(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-canvas flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
-        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
-          <div className="bg-slate-900 px-8 py-8 text-white">
+        <div className="mb-6 bg-surface rounded-xl border border-line p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"><LanguagePicker /></div>
+        <details open={hasPickedBackup() || undefined} className="mb-6 bg-surface rounded-xl border border-line p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <summary className="cursor-pointer text-[13px] font-medium text-brand-700">{t("Moving phones? Import an existing backup")}</summary>
+          <div className="mt-4"><BackupPanel /></div>
+        </details>
+        <div className="bg-surface rounded-xl border border-line shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden">
+          <div className="border-b border-line p-5 text-ink">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
+              <div className="w-10 h-10 bg-brand rounded-xl flex items-center justify-center">
                 <Building2 className="w-6 h-6" />
               </div>
               <div>
-                <h1 className="text-xl font-bold">Welcome to Fatorati</h1>
-                <p className="text-sm text-slate-400">Set up your business to get started</p>
+                <h1 className="text-xl font-bold">{t("Welcome to Fatorati")}</h1>
+                <p className="text-[13px] text-muted">{t("Set up your business to get started")}</p>
               </div>
             </div>
-            <div className="mt-4 p-3 bg-slate-800 rounded-lg">
-              <p className="text-xs text-slate-300">
-                <span className="font-semibold text-white">100% Local • Offline</span> - Simple business management. No subscription. Your customers, invoices and business records stay on your device. Works offline.
-              </p>
+            <div className="mt-4 p-3 bg-brand-50 rounded-lg">
+              <p className="text-[12px] text-muted">
+                <span className="font-semibold text-brand-700">{t("100% Local • Offline")}</span>{' '}{t("- Simple business management. No subscription. Your customers, invoices and business records stay on your device. Works offline.")}</p>
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="p-8 space-y-5">
+          <form onSubmit={handleSubmit} className="p-5 space-y-3.5">
+            <CurrencyPicker value={currency} onChange={setCurrency} />
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+              <div className="bg-serious-50 border border-serious/20 text-serious px-4 py-3 rounded-lg text-[13px]">
                 {error}
               </div>
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              <label className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">
                 <span className="flex items-center gap-2">
-                  <Building2 className="w-4 h-4" />
-                  Business Name *
-                </span>
+                  <Building2 className="w-4 h-4" />{t("Business Name *")}</span>
               </label>
               <input
                 type="text"
                 required
                 value={businessName}
                 onChange={(e) => setBusinessName(e.target.value)}
-                placeholder="Acme Inc."
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                placeholder={t("Acme Inc.")}
+                className="w-full px-3 py-2 text-[13.5px] border border-line-strong rounded-lg focus:ring-2 outline-none bg-surface text-ink transition-colors placeholder:text-faint focus:border-brand focus:ring-brand/15"
                 autoFocus
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              <label className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">
                 <span className="flex items-center gap-2">
-                  <User className="w-4 h-4" />
-                  Owner Name *
-                </span>
+                  <User className="w-4 h-4" />{t("Owner Name *")}</span>
               </label>
               <input
                 type="text"
                 required
                 value={ownerName}
                 onChange={(e) => setOwnerName(e.target.value)}
-                placeholder="John Doe"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                placeholder={t("John Doe")}
+                className="w-full px-3 py-2 text-[13.5px] border border-line-strong rounded-lg focus:ring-2 outline-none bg-surface text-ink transition-colors placeholder:text-faint focus:border-brand focus:ring-brand/15"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">
                   <span className="flex items-center gap-2">
-                    <Phone className="w-4 h-4" />
-                    Phone
-                  </span>
+                    <Phone className="w-4 h-4" />{t("Phone")}</span>
                 </label>
                 <input
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="(555) 123-4567"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  placeholder={t('Phone example')}
+                  className="w-full px-3 py-2 text-[13.5px] border border-line-strong rounded-lg focus:ring-2 outline-none bg-surface text-ink transition-colors placeholder:text-faint focus:border-brand focus:ring-brand/15"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">
                   <span className="flex items-center gap-2">
-                    <Mail className="w-4 h-4" />
-                    Email
-                  </span>
+                    <Mail className="w-4 h-4" />{t("Email")}</span>
                 </label>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="owner@business.com"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  placeholder={t("owner@business.com")}
+                  className="w-full px-3 py-2 text-[13.5px] border border-line-strong rounded-lg focus:ring-2 outline-none bg-surface text-ink transition-colors placeholder:text-faint focus:border-brand focus:ring-brand/15"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              <label className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">
                 <span className="flex items-center gap-2">
-                  <MapPin className="w-4 h-4" />
-                  Address
-                </span>
+                  <MapPin className="w-4 h-4" />{t("Address")}</span>
               </label>
               <input
                 type="text"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
-                placeholder="123 Business St"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                placeholder={t("123 Business St")}
+                className="w-full px-3 py-2 text-[13.5px] border border-line-strong rounded-lg focus:ring-2 outline-none bg-surface text-ink transition-colors placeholder:text-faint focus:border-brand focus:ring-brand/15"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">City</label>
+              <label className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t("City")}</label>
               <input
                 type="text"
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
-                placeholder="New York, NY 10001"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                placeholder={t("New York, NY 10001")}
+                className="w-full px-3 py-2 text-[13.5px] border border-line-strong rounded-lg focus:ring-2 outline-none bg-surface text-ink transition-colors placeholder:text-faint focus:border-brand focus:ring-brand/15"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              <label className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">
                 <span className="flex items-center gap-2">
-                  <ImageIcon className="w-4 h-4" />
-                  Business Logo (optional)
-                </span>
+                  <ImageIcon className="w-4 h-4" />{t("Business Logo (optional)")}</span>
               </label>
               <div className="flex items-center gap-4">
                 {logo && (
-                  <img src={logo} alt="Logo" className="w-16 h-16 rounded-lg object-cover border" />
+                  <img src={logo} alt={t("Logo")} className="w-16 h-16 rounded-lg object-cover border" />
                 )}
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleLogoChange}
-                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                />
+                <button type="button" onClick={chooseLogoFile} className="px-3.5 py-2 rounded-lg text-[13px] font-semibold bg-brand-50 text-brand-700 hover:bg-brand-100 transition-all active:scale-[0.98] disabled:opacity-40 shadow-sm">{t('Choose logo')}</button>
               </div>
-              <p className="text-xs text-gray-500 mt-1">Max 2MB, PNG/JPG recommended</p>
+              <p className="text-[12px] text-muted mt-1">{t("Max 2MB, PNG/JPG recommended")}</p>
             </div>
 
             <div className="pt-2">
               <button
                 type="submit"
                 disabled={!canSubmit}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                className="w-full bg-brand hover:bg-brand-700 disabled:bg-line-strong disabled:cursor-not-allowed text-white font-semibold py-3 px-3.5 rounded-lg flex items-center justify-center gap-2 transition-colors transition-all active:scale-[0.98] disabled:opacity-40 shadow-sm"
               >
                 {submitting ? (
                   <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Setting up...
-                  </>
+                    <Loader2 className="w-5 h-5 animate-spin" />{t("Setting up...")}</>
                 ) : (
-                  <>Continue to Dashboard</>
+                  <>{t("Continue to Dashboard")}</>
                 )}
               </button>
-              <p className="text-xs text-gray-500 text-center mt-3">
-                No account required • Your data stays on device
-              </p>
+              <p className="text-[12px] text-muted text-center mt-3">{t("No account required • Your data stays on device")}</p>
             </div>
           </form>
         </div>
 
-        <p className="text-center text-slate-400 text-xs mt-6">
-          Fatorati • Simple business management • Works offline
-        </p>
+        <p className="text-center text-muted text-[12px] mt-6">{t("Fatorati • Simple business management • Works offline")}</p>
       </div>
     </div>
   )

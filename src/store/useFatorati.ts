@@ -6,8 +6,11 @@
  */
 
 import { create } from 'zustand'
+import { getPreferences } from '../lib/preferences'
+import { sessionGuard } from '../lib/vault'
 import * as db from '../lib/db'
 import { generateId } from '../lib/db'
+import type { ImportMode, ImportSummary } from '../lib/backup-format'
 import type { Business, Customer, Project, Invoice, Estimate, Expense, Product, Settings, DashboardStats } from './types'
 
 interface FatoratiState {
@@ -70,11 +73,10 @@ interface FatoratiState {
   updateSettings: (patch: Partial<Settings>) => Promise<void>
   
   // Dashboard
-  getDashboardStats: () => DashboardStats
   
   // Backup
-  exportBackup: () => Promise<void>
-  importBackup: (file: File) => Promise<void>
+  exportBackup: (password?: string) => Promise<void>
+  importBackup: (backup: db.FatoratiBackup, mode: ImportMode) => Promise<ImportSummary>
   
   // Init
   init: () => Promise<void>
@@ -94,22 +96,14 @@ export const useFatorati = create<FatoratiState>((set, get) => ({
   isLoading: true,
 
   init: async () => {
+    const guard = sessionGuard()
     set({ isLoading: true })
     try {
-      const isOnboarded = await db.isOnboardingCompleted()
-      const business = await db.getBusiness()
-      
-      if (isOnboarded && business) {
-        const [customers, projects, invoices, estimates, expenses, products, settingsList] = await Promise.all([
-          db.getAll<Customer>('customers'),
-          db.getAll<Project>('projects'),
-          db.getAll<Invoice>('invoices'),
-          db.getAll<Estimate>('estimates'),
-          db.getAll<Expense>('expenses'),
-          db.getAll<Product>('products'),
-          db.getAll<Settings>('settings'),
-        ])
-        
+      const snapshot = await db.exportBackup()
+      const business = snapshot.businesses[0]
+      if (business) {
+        const { customers, projects, invoices, estimates, expenses, products, settings: settingsList } = snapshot
+        guard()
         set({
           business,
           customers,
@@ -123,10 +117,11 @@ export const useFatorati = create<FatoratiState>((set, get) => ({
           isLoading: false,
         })
       } else {
-        set({ isOnboarded: false, isLoading: false })
+        set({ business: null, customers: [], projects: [], invoices: [], estimates: [], expenses: [], products: [], settings: null, isOnboarded: false, isLoading: false })
       }
     } catch (e) {
       console.error('Failed to init Fatorati:', e)
+      guard()
       set({ isLoading: false })
     }
   },
@@ -144,12 +139,12 @@ export const useFatorati = create<FatoratiState>((set, get) => ({
     const settings: Settings = {
       id: generateId(),
       businessId: business.id,
-      currency: 'USD',
+      currency: business.currency || getPreferences().defaultCurrency,
       taxRate: 0,
       invoicePrefix: 'INV',
       estimatePrefix: 'EST',
-      theme: 'light',
-      language: 'en',
+      theme: getPreferences().theme,
+      language: getPreferences().language,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     }
@@ -331,31 +326,14 @@ export const useFatorati = create<FatoratiState>((set, get) => ({
     set({ settings: updated })
   },
 
-  getDashboardStats: () => {
-    const { customers, invoices, expenses } = get()
-    const totalRevenue = invoices.filter((inv) => inv.status === 'paid').reduce((sum, inv) => sum + inv.total, 0)
-    const pendingInvoices = invoices.filter((inv) => inv.status === 'sent').length
-    const overdueInvoices = invoices.filter((inv) => inv.status === 'overdue').length
-    const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0)
-
-    return {
-      totalCustomers: customers.length,
-      totalInvoices: invoices.length,
-      totalRevenue,
-      pendingInvoices,
-      overdueInvoices,
-      totalExpenses,
-    }
-  },
-
-  exportBackup: async () => {
+  exportBackup: async (password) => {
     const backup = await db.exportBackup()
-    db.downloadBackupFile(backup)
+    await db.downloadBackupFile(backup, password)
   },
 
-  importBackup: async (file) => {
-    const backup = await db.loadBackupFile(file)
-    await db.importBackup(backup)
-    await get().init()
+  importBackup: async (backup, mode) => {
+    const summary = await db.importBackup(backup, mode)
+    // Reload after Settings displays the commit result, rather than unmounting its dialog.
+    return summary
   },
 }))

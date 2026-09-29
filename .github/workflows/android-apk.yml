@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [main, arena/01a0edf7-app]
+    branches: [main, 'arena/**']
   workflow_dispatch:
 
 jobs:
@@ -23,6 +23,8 @@ jobs:
       - uses: android-actions/setup-android@v4
 
       - run: pnpm install --frozen-lockfile
+      - run: pnpm exec tsc --noEmit
+      - run: pnpm test
       - run: pnpm build
       - run: pnpm cap:sync android
 

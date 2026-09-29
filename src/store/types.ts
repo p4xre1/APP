@@ -1,3 +1,4 @@
+import type { Language } from '../lib/preferences'
 /**
  * Fatorati Offline - Types
  * 100% Local • Offline - Simple business management
@@ -16,6 +17,7 @@ export type ModuleKey =
   | 'settings'
 
 export interface Business {
+  currency?: string
   id: string
   name: string
   ownerName: string
@@ -62,6 +64,12 @@ export interface InvoiceItem {
 }
 
 export interface Invoice {
+  currency?: string
+  language?: Language
+  exchangeRate?: number // Default-currency units for one unit of this currency.
+  rateCurrency?: string // Currency the manual exchange rate targets.
+  occurredAt?: number // UTC milliseconds.
+  pdfColor?: boolean
   id: string
   number: string
   customerId: string
@@ -79,6 +87,12 @@ export interface Invoice {
 }
 
 export interface Estimate {
+  currency?: string
+  language?: Language
+  exchangeRate?: number // Default-currency units for one unit of this currency.
+  rateCurrency?: string // Currency the manual exchange rate targets.
+  occurredAt?: number // UTC milliseconds.
+  pdfColor?: boolean
   id: string
   number: string
   customerId: string
@@ -96,6 +110,12 @@ export interface Estimate {
 }
 
 export interface Expense {
+  currency?: string
+  language?: Language
+  exchangeRate?: number // Default-currency units for one unit of this currency.
+  rateCurrency?: string // Currency the manual exchange rate targets.
+  occurredAt?: number // UTC milliseconds.
+  pdfColor?: boolean
   id: string
   description: string
   amount: number
@@ -122,12 +142,12 @@ export interface Product {
 export interface Settings {
   id: string
   businessId: string
-  currency: 'USD' | 'EUR'
+  currency: string
   taxRate: number
   invoicePrefix: string
   estimatePrefix: string
-  theme: 'light' | 'dark'
-  language: 'en'
+  theme: 'light' | 'dark' | 'system'
+  language: Language
   createdAt: number
   updatedAt: number
 }

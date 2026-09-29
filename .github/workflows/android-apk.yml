@@ -28,16 +28,13 @@ jobs:
         uses: android-actions/setup-android@v4
 
       - name: Install dependencies
-        run: |
-          npm install -g pnpm@10.34.3
-          pnpm --version
-          pnpm install --frozen-lockfile
+        run: npm install --legacy-peer-deps
 
       - name: Build web (offline production)
-        run: pnpm build
+        run: npm run build
 
       - name: Sync Capacitor Android
-        run: pnpm cap:sync android
+        run: npx cap sync android
 
       - name: Build Debug APK
         run: |

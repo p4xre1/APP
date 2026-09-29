@@ -34,27 +34,47 @@ jobs:
 
       - name: Install dependencies
         run: |
-          echo "Trying pnpm install with frozen lockfile..."
-          pnpm install --frozen-lockfile || {
-            echo "Frozen install failed, trying without frozen..."
-            pnpm install --no-frozen-lockfile || {
-              echo "No-frozen failed, trying with ignore-scripts..."
-              pnpm install --frozen-lockfile --ignore-scripts
+          echo "Node: $(node --version)"
+          echo "pnpm: $(pnpm --version)"
+          echo "Lockfile exists: $(ls -lh pnpm-lock.yaml)"
+          echo "Attempt 1: frozen"
+          pnpm install --frozen-lockfile --reporter=append-only 2>&1 | tee pnpm.log || {
+            echo "Attempt 1 failed, trying without frozen..."
+            pnpm install --no-frozen-lockfile --reporter=append-only 2>&1 | tee -a pnpm.log || {
+              echo "Attempt 2 failed, trying npm..."
+              npm install --legacy-peer-deps 2>&1 | tee -a pnpm.log || {
+                echo "All attempts failed"
+                cat pnpm.log | tail -n 200
+                exit 1
+              }
             }
           }
+          echo "Install succeeded"
+          cat pnpm.log | tail -n 50
 
       - name: Build web (offline production)
-        run: pnpm build
+        run: pnpm build || npm run build
 
       - name: Sync Capacitor Android
-        run: pnpm cap:sync android
+        run: pnpm cap:sync android || npx cap sync android
 
       - name: Build Debug APK
         run: |
           cd android
           chmod +x gradlew
           echo "sdk.dir=$ANDROID_HOME" > local.properties
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee ../gradle.log
+          find . -name "*.apk" -type f -exec ls -lh {} \; || echo "No APK"
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            pnpm.log
+            gradle.log
+          retention-days: 7
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4

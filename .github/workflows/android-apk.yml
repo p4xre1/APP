@@ -13,11 +13,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.34.3
-
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
@@ -34,13 +29,15 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pnpm install --frozen-lockfile || pnpm install --no-frozen-lockfile || npm install --legacy-peer-deps
+          npm install -g pnpm@10.34.3
+          pnpm --version
+          pnpm install --frozen-lockfile
 
       - name: Build web (offline production)
-        run: pnpm build || npm run build
+        run: pnpm build
 
       - name: Sync Capacitor Android
-        run: pnpm cap:sync android || npx cap sync android
+        run: pnpm cap:sync android
 
       - name: Build Debug APK
         run: |

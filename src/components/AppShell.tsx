@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { LayoutDashboard, Users, FolderOpen, FileText, ClipboardList, ReceiptText, Package, BarChart3, Settings, Search, PanelLeftClose, PanelLeftOpen, Menu, X, Plus, ChevronDown, ShieldCheck, LockKeyhole, Sun, Moon, type LucideIcon } from 'lucide-react'
+import { LayoutDashboard, Users, FolderOpen, FileText, ClipboardList, ReceiptText, Package, CalendarDays, BarChart3, Settings, Search, PanelLeftClose, PanelLeftOpen, Menu, X, Plus, ChevronDown, ShieldCheck, LockKeyhole, Sun, Moon, type LucideIcon } from 'lucide-react'
 import { useI18n, usePreferences, errorText } from '../i18n'
 import { savePreferences } from '../lib/preferences'
 import { lockVault } from '../lib/vault'
@@ -14,6 +14,7 @@ const navigation: {key:ModuleKey; label:string; group:string; icon:LucideIcon}[]
   {key:'estimates',label:'Estimates',group:'Finance',icon:ClipboardList},
   {key:'expenses',label:'Expenses',group:'Finance',icon:ReceiptText},
   {key:'products',label:'Products',group:'Business',icon:Package},
+  {key:'calendar',label:'Calendar',group:'Finance',icon:CalendarDays},
   {key:'reports',label:'Reports',group:'Finance',icon:BarChart3},
   {key:'settings',label:'Settings',group:'Workspace',icon:Settings},
 ]

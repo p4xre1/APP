@@ -33,30 +33,18 @@ jobs:
         uses: android-actions/setup-android@v4
 
       - name: Install dependencies
-        run: |
-          echo "Node: $(node --version)"
-          echo "pnpm: $(pnpm --version)"
-          echo "Lockfile exists: $(ls -lh pnpm-lock.yaml)"
-          echo "Attempt 1: frozen"
-          pnpm install --frozen-lockfile --reporter=append-only 2>&1 | tee pnpm.log || {
-            echo "Attempt 1 failed, trying without frozen..."
-            pnpm install --no-frozen-lockfile --reporter=append-only 2>&1 | tee -a pnpm.log || {
-              echo "Attempt 2 failed, trying npm..."
-              npm install --legacy-peer-deps 2>&1 | tee -a pnpm.log || {
-                echo "All attempts failed"
-                cat pnpm.log | tail -n 200
-                exit 1
-              }
-            }
-          }
-          echo "Install succeeded"
-          cat pnpm.log | tail -n 50
+        run: pnpm install --frozen-lockfile
 
       - name: Build web (offline production)
-        run: pnpm build || npm run build
+        run: |
+          echo "Building web..."
+          pnpm build 2>&1 | tee build.log
+          echo "Exit: ${PIPESTATUS[0]}"
+          cat build.log | tail -n 100
+          ls -lh dist/ || echo "No dist"
 
       - name: Sync Capacitor Android
-        run: pnpm cap:sync android || npx cap sync android
+        run: pnpm cap:sync android
 
       - name: Build Debug APK
         run: |
@@ -72,7 +60,7 @@ jobs:
         with:
           name: build-logs
           path: |
-            pnpm.log
+            build.log
             gradle.log
           retention-days: 7
 

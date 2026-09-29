@@ -1,13 +1,13 @@
 import type { FatoratiBackup } from './db'
 
-export const BACKUP_VERSION = '2.0.0'
-import { STORES, type StoreName } from './schema'
-export { STORES } from './schema'
+export const BACKUP_VERSION = '3.0.0'
+import { STORES, RECORD_STORES, type StoreName } from './schema'
+export { STORES, RECORD_STORES } from './schema'
 export type { StoreName } from './schema'
 import { defaultPreferences, validPreferences, validCurrency, languages } from './preferences'
 import { roundMoney } from './format'
 export type ImportMode = 'replace' | 'merge'
-export interface ImportSummary { added: number; updated: number; skipped: number }
+export interface ImportSummary { added: number; updated: number; deleted: number; skipped: number }
 
 function object(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -23,17 +23,19 @@ const strings: Record<StoreName, string[]> = {
   expenses: ['description', 'category', 'date', 'vendor'],
   products: ['name', 'description', 'sku', 'unit'],
   settings: ['businessId', 'invoicePrefix', 'estimatePrefix'],
+  tombstones: ['store'],
 }
 const numbers: Record<StoreName, string[]> = {
   businesses: [], customers: ['balance'], projects: ['budget'],
   invoices: ['subtotal', 'tax', 'total'], estimates: ['subtotal', 'tax', 'total'],
-  expenses: ['amount'], products: ['unitPrice', 'stock'], settings: ['taxRate'],
+  expenses: ['amount'], products: ['unitPrice', 'stock'], settings: ['taxRate'], tombstones: [],
 }
 const enums: Partial<Record<StoreName, Record<string, string[]>>> = {
   projects: { status: ['planning', 'active', 'on_hold', 'done'] },
   invoices: { status: ['draft', 'sent', 'paid', 'overdue'] },
   estimates: { status: ['draft', 'sent', 'accepted', 'declined'] },
   settings: { theme: ['light', 'dark', 'system'], language: [...languages] },
+  tombstones: { store: [...RECORD_STORES] },
 }
 
 /** Validate everything before opening a write transaction. Legacy unencrypted v1 files remain valid. */
@@ -58,6 +60,7 @@ export function validateBackup(value: unknown): asserts value is FatoratiBackup 
       for (const [key, choices] of Object.entries(enums[name] || {})) {
         if (!choices.includes(record[key] as string)) throw invalid()
       }
+      if (name === 'tombstones' && !timestamp(record.deletedAt)) throw invalid()
       if (['invoices','estimates','expenses','settings','businesses'].includes(name) && !validCurrency(record.currency)) throw invalid()
       if (['invoices','estimates','expenses'].includes(name)) {
         if (!languages.includes(record.language as typeof languages[number]) || !timestamp(record.occurredAt)) throw invalid()
@@ -107,15 +110,15 @@ export function toBase64(bytes: Uint8Array): string {
   return btoa(binary)
 }
 
-function fromBase64(text: string): Uint8Array<ArrayBuffer> {
+export function fromBase64(text: string): Uint8Array<ArrayBuffer> {
   return Uint8Array.from(atob(text), char => char.charCodeAt(0))
 }
 
-async function deriveKey(password: string, salt: Uint8Array<ArrayBuffer>): Promise<CryptoKey> {
+export async function deriveKey(password: string, salt: Uint8Array<ArrayBuffer>, iterations = ITERATIONS): Promise<CryptoKey> {
   if (!globalThis.crypto?.subtle) throw new Error('Secure encryption is not available on this device.')
   const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey'])
   return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt, iterations: ITERATIONS, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
     material, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'],
   )
 }
@@ -163,7 +166,7 @@ export async function decodeBackup(text: string, password?: string): Promise<Fat
 
 /** v1 -> v2; ISO timestamps in portable files -> UTC milliseconds in memory. */
 export function migrateBackup(input: unknown): FatoratiBackup {
-  if (!object(input) || !['1.0.0', BACKUP_VERSION].includes(input.version as string)) throw new Error('Unsupported backup version')
+  if (!object(input) || !['1.0.0', '2.0.0', BACKUP_VERSION].includes(input.version as string)) throw new Error('Unsupported backup version')
   const value = JSON.parse(JSON.stringify(input), (key, item) => {
     if (['createdAt','updatedAt','occurredAt','exportedAt'].includes(key) && typeof item === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(item)) return Date.parse(item)
     return item
@@ -185,8 +188,11 @@ export function migrateBackup(input: unknown): FatoratiBackup {
         }
       }
     }
-    value.version = BACKUP_VERSION
+    value.version = '2.0.0'
   }
+  // v2 files predate deletion markers.
+  if (!Array.isArray(value.tombstones)) value.tombstones = []
+  value.version = BACKUP_VERSION
   validateBackup(value)
   // Quantize legacy floating amounts, as well as externally authored v2 files.
   for(const name of STORES) for(const row of value[name]) Object.assign(row, normalizeRecord(name, row as unknown as Record<string,unknown>, value.preferences.defaultCurrency))

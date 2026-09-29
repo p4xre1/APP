@@ -55,7 +55,7 @@ export default function BackupPanel() {
       if (selectedMode === 'replace' && !await askConfirm(t("Replace ALL data on this phone? All current businesses, customers, projects, invoices, estimates, expenses, products and settings will be deleted and replaced by this backup. Export your current data first. Continue?"))) return
       const summary = await importBackup(backup, selectedMode)
       setPendingFile(null); setImportPassword('')
-      await showAlert(t('Import summary', { added: summary.added, updated: summary.updated, skipped: summary.skipped }))
+      await showAlert(t('Import summary', { added: summary.added, updated: summary.updated, deleted: summary.deleted, skipped: summary.skipped }))
       window.location.reload()
     } catch (error) {
       if (error instanceof PasswordRequiredError) {
@@ -70,10 +70,11 @@ export default function BackupPanel() {
   }
 
   return (
-    <div className="bg-surface rounded-xl border border-line p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+    <div id="backup-panel" className="bg-surface rounded-xl border border-line p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
       <h2 className="text-[14px] font-bold text-ink mb-4 flex items-center gap-2"><Download className="w-5 h-5" />{t("Backup & Restore")}</h2>
       <p className="text-[13px] text-muted mb-3">{t("Your data lives only on this phone. Uninstalling the app deletes it. Export a backup regularly.")}</p>
       <p className="text-[12px] text-muted mb-4">{t("Last backup date:")}{!loaded ? t("Loading...") : error ? t("Unavailable") : lastBackup ? formatDate(lastBackup,true) : t("Never")}</p>
+      <p className="text-[12px] text-warn mb-4">{t("Deletions are shared with other phones for 180 days. A phone that has not synced for more than 180 days may bring deleted records back.")}</p>
       <div className="space-y-4">
         <div className="bg-brand-50 border border-brand/20 rounded-lg p-4">
           <h3 className="font-medium text-ink text-[13px]">{t("Export Backup")}</h3>
@@ -99,7 +100,7 @@ export default function BackupPanel() {
               <option value="replace">{t("Replace all data")}</option>
             </select>
           </label>
-          <p className="text-[12px] text-warn">{mode === 'merge' ? t("Match by ID and keep the newer updatedAt. Local records are never deleted; ties keep the local record. Keep both phones’ clocks accurate. To sync both ways, export the merged data back to the other phone.") : t("Deletes all current data and restores the backup. You will be asked to confirm.")}</p>
+          <p className="text-[12px] text-warn">{mode === 'merge' ? t("Match by ID and keep the newer updatedAt. Deletions are synced too, so a deleted record is not brought back by an older backup. Ties keep the local record. Keep both phones’ clocks accurate. To sync both ways, export the merged data back to the other phone.") : t("Deletes all current data, including the deletion list, and restores the backup. You will be asked to confirm.")}</p>
           {!pendingFile ? <button onClick={() => chooseBackupFile(mode)} disabled={busy} className="w-full bg-amber-600 hover:bg-amber-700 disabled:bg-line-strong text-white py-2.5 rounded-lg text-[13px] font-medium flex items-center justify-center gap-2">
             <Upload className="w-4 h-4" />{busy ? t("Working...") : t("Import Backup")}
           </button> : <form onSubmit={e => { e.preventDefault(); void handleImport(pendingFile, importPassword) }} className="space-y-4">

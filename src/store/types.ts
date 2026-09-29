@@ -152,6 +152,15 @@ export interface Settings {
   updatedAt: number
 }
 
+/** Marker kept after a deletion so merging an older backup cannot bring the record back. */
+export interface Tombstone {
+  id: string
+  store: string
+  deletedAt: number
+  createdAt: number
+  updatedAt: number
+}
+
 export interface DashboardStats {
   totalCustomers: number
   totalInvoices: number

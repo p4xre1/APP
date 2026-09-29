@@ -4,6 +4,7 @@ import { t, usePreferences } from '../i18n'
 import { savePreferences, supportedValues } from '../lib/preferences'
 import PreferencesPanel from '../components/PreferencesPanel'
 import SecurityPanel from '../components/SecurityPanel'
+import ProtectedExportPanel from '../components/ProtectedExportPanel'
 /**
  * Fatorati Offline - Settings
  * 100% Local • Offline - Export/Import Backup, Business Settings
@@ -93,6 +94,7 @@ export default function Settings() {
 
         <div className="space-y-5">
           <BackupPanel />
+          <ProtectedExportPanel />
 
           <div className="bg-surface rounded-xl border border-line p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
             <h2 className="text-[14px] font-bold text-ink mb-4 flex items-center gap-2">

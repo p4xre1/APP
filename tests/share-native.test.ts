@@ -31,7 +31,7 @@ const { shareFile } = await import('../src/lib/share-file')
 const { fixture } = await import('./fixtures')
 const { createOrChangePin, lockVault } = await import('../src/lib/vault')
 const { decodeBackup } = await import('../src/lib/backup-format')
-beforeEach(async () => { lockVault(); globalThis.indexedDB = new IDBFactory(); await createOrChangePin('123456'); calls.length = 0; failure = null; preferences.clear() })
+beforeEach(async () => { lockVault(); globalThis.indexedDB = new IDBFactory(); await createOrChangePin('482915'); calls.length = 0; failure = null; preferences.clear() })
 
 test('native backup writes UTF-8 .fatorati to Cache, shares the returned URI, then records date', async () => {
   await downloadBackupFile(fixture(), 'secret')

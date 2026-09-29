@@ -6,9 +6,11 @@ import type { Business, Customer, Invoice, Estimate } from '../store/types'
 import { money } from './fatorati'
 import type { Currency } from './fatorati'
 import { shareFile } from './share-file'
+import { encodeProtectedExport, EXPORT_EXTENSION } from './export-crypto'
+import { confirmPlaintextExport } from './export-warning'
 
 /** Render using bundled Inter/Tajawal fonts; no remote font download is needed. */
-export async function shareInvoicePdf(invoice: Invoice | Estimate, business: Business | null, customer?: Customer, currency: Currency = invoice.currency || getPreferences().defaultCurrency): Promise<void> {
+export async function shareInvoicePdf(invoice: Invoice | Estimate, business: Business | null, customer?: Customer, currency: Currency = invoice.currency || getPreferences().defaultCurrency, password?: string): Promise<void> {
   const guard = sessionGuard(), prefs=getPreferences(), language=invoice.language||prefs.language
   const tr = (key:string) => t(key,{},language)
   const useColor = invoice.pdfColor ?? prefs.pdfColor
@@ -75,5 +77,12 @@ export async function shareInvoicePdf(invoice: Invoice | Estimate, business: Bus
   }
   flush()
   guard()
-  await shareFile(`${invoice.number}.pdf`, new Uint8Array(pdf.output('arraybuffer')), 'application/pdf')
+  const bytes = new Uint8Array(pdf.output('arraybuffer'))
+  if (password !== undefined) {
+    if (!password) throw new Error('Enter a password to protect this export')
+    const container = await encodeProtectedExport(bytes, { password, kind: 'pdf', filename: `${invoice.number}.pdf` })
+    return shareFile(`${invoice.number}${EXPORT_EXTENSION}`, container, 'application/octet-stream')
+  }
+  await confirmPlaintextExport()
+  await shareFile(`${invoice.number}.pdf`, bytes, 'application/pdf')
 }

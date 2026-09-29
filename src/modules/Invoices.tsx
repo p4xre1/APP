@@ -6,16 +6,21 @@ import { getPreferences } from '../lib/preferences'
 import { roundMoney, sumMoney, formatDate } from '../lib/format'
 import { errorText } from '../i18n'
 import { shareInvoicePdf } from '../lib/invoice-pdf'
+import { exportDocumentCsv } from '../lib/csv'
+import { EXPORT_CANCELED } from '../lib/export-warning'
+import ExportProtect from '../components/ExportProtect'
 import type { Invoice } from '../store/types'
 import ExportCsvButton from '../components/ExportCsvButton'
 import { useState } from 'react'
 import { useFatorati } from '../store/useFatorati'
 import { money, generateInvoiceNumber } from '../lib/fatorati'
-import { Plus, Download, Share2, X } from 'lucide-react'
+import { Plus, Download, Share2, X, FileSpreadsheet } from 'lucide-react'
 
 export default function Invoices() {
   const { invoices, customers, business, settings, addInvoice, deleteInvoice, updateInvoice } = useFatorati()
   const [showAdd, setShowAdd] = useState(false)
+  const [protect, setProtect] = useState({ enabled: false, password: '' })
+  const [busy, setBusy] = useState(false)
   const [form, setForm] = useState({
     currency: getPreferences().defaultCurrency, language: getPreferences().language, pdfColor: getPreferences().pdfColor, exchangeRate: undefined as number | undefined, rateCurrency: undefined as string | undefined,
     customerId: '',
@@ -64,10 +69,16 @@ export default function Invoices() {
   async function handleShare(invoice: Invoice) {
     setSharing(true)
     try {
-      await shareInvoicePdf(invoice, business, customers.find(c => c.id === invoice.customerId), invoice.currency || settings?.currency)
+      await shareInvoicePdf(invoice, business, customers.find(c => c.id === invoice.customerId), invoice.currency || settings?.currency, protect.enabled ? protect.password : undefined)
     } catch (error) {
-      showAlert(t('PDF share not completed') + ': ' + (errorText(error)))
+      if ((error as Error)?.message !== EXPORT_CANCELED) showAlert(t('PDF share not completed') + ': ' + (errorText(error)))
     } finally { setSharing(false) }
+  }
+  async function handleCsv(invoice: Invoice) {
+    setBusy(true)
+    try { await exportDocumentCsv('invoices', invoice.id, invoice.language || getPreferences().language, protect.enabled ? protect.password : undefined) }
+    catch (error) { if ((error as Error)?.message !== EXPORT_CANCELED) showAlert(t('CSV export not completed: ') + errorText(error)) }
+    finally { setBusy(false) }
   }
 
   const { subtotal, total } = calculateTotal()
@@ -83,7 +94,10 @@ export default function Invoices() {
           <Plus className="w-4 h-4" />{t("New Invoice")}</button>
       </div>
 
-      <ExportCsvButton store="invoices" />
+      <div className="flex flex-wrap items-end gap-6">
+        <ExportCsvButton store="invoices" />
+        <ExportProtect value={protect} onChange={patch => setProtect(current => ({ ...current, ...patch }))} label={t('Protect PDF with password')} />
+      </div>
 
       {showAdd && (
         <div className="bg-surface rounded-xl border border-line p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
@@ -184,6 +198,9 @@ export default function Invoices() {
                       </button>
                       <button disabled={sharing} onClick={() => handleShare(invoice)} className="p-2 hover:bg-canvas rounded-lg" title={t("Share")}>
                         <Share2 className="w-4 h-4 text-muted" />
+                      </button>
+                      <button disabled={busy} onClick={() => handleCsv(invoice)} className="p-2 hover:bg-canvas rounded-lg" title={t("Export invoice data as CSV")}>
+                        <FileSpreadsheet className="w-4 h-4 text-muted" />
                       </button>
                       <button onClick={() => deleteInvoice(invoice.id)} className="text-[12px] text-serious hover:text-serious px-2 py-1">{t("Delete")}</button>
                     </div>

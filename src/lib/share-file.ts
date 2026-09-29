@@ -1,13 +1,14 @@
 import { Capacitor } from '@capacitor/core'
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
 import { Share } from '@capacitor/share'
+import { EXPORT_DIR } from './cache'
 
 /** Cache is FileProvider-accessible; never request external storage permissions. */
 export async function shareFile(filename: string, content: string | Uint8Array<ArrayBuffer>, mime: string): Promise<void> {
   const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_')
   if (Capacitor.isNativePlatform()) {
     // Separate cache folders prevent one share from overwriting another app's pending attachment.
-    const path = `exports/${crypto.randomUUID()}/${safeName}`
+    const path = `${EXPORT_DIR}/${crypto.randomUUID()}/${safeName}`
     const { toBase64 } = await import('./backup-format')
     const { uri } = await Filesystem.writeFile({
       path, directory: Directory.Cache, recursive: true,

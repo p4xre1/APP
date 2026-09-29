@@ -34,16 +34,14 @@ jobs:
 
       - name: Install dependencies
         run: |
-          for i in 1 2 3; do
-            echo "=== Install attempt $i ==="
-            pnpm install --frozen-lockfile && break
-            echo "Install failed on attempt $i"
-            if [ $i -eq 3 ]; then
-              echo "Install failed after 3 attempts"
-              exit 1
-            fi
-            sleep 5
-          done
+          pnpm --version
+          node --version
+          echo "Lockfile:"
+          ls -lh pnpm-lock.yaml
+          echo "Trying install..."
+          pnpm install --frozen-lockfile --reporter=append-only 2>&1 | tee pnpm.log
+          echo "Exit: ${PIPESTATUS[0]}"
+          cat pnpm.log | tail -n 100
 
       - name: Build web (offline production)
         run: pnpm build
@@ -61,14 +59,15 @@ jobs:
           find . -name "*.apk" -type f -exec ls -lh {} \; || echo "No APK"
           mkdir -p ../artifacts
           find app/build -name "*.apk" -type f -exec cp -v {} ../artifacts/ \; || true
-          ls -lh ../artifacts/ || true
 
-      - name: Upload gradle logs
+      - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gradle-logs
-          path: gradle.log
+          name: build-logs
+          path: |
+            pnpm.log
+            gradle.log
           retention-days: 7
 
       - name: Upload APK Artifact

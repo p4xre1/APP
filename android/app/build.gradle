@@ -1,5 +1,29 @@
 apply plugin: 'com.android.application'
 
+/**
+ * Versioning: `package.json` holds `version` (the single source of truth for
+ * versionName) and `android/version.properties` holds `versionCode`. Nothing
+ * else in this file may hard-code either value. `pnpm version:set` updates both
+ * files, and CI fails if the Android build disagrees with package.json.
+ */
+def fatoratiPackage = new groovy.json.JsonSlurper().parseText(file('../../package.json').text)
+def fatoratiVersionProperties = new Properties()
+file('../version.properties').withInputStream { fatoratiVersionProperties.load(it) }
+def fatoratiVersionName = fatoratiPackage.version.toString()
+def fatoratiVersionCode = fatoratiVersionProperties.getProperty('versionCode').trim().toInteger()
+
+/**
+ * Release signing is optional and never committed: provide the upload key
+ * through environment variables or ~/.gradle/gradle.properties (see the
+ * "Release build" section of the README). Without them the release bundle and
+ * APK are still built, just unsigned, which is what CI does.
+ */
+def fatoratiKeystore = System.getenv('FATORATI_KEYSTORE') ?: project.findProperty('fatoratiKeystore')
+def fatoratiKeystorePassword = System.getenv('FATORATI_KEYSTORE_PASSWORD') ?: project.findProperty('fatoratiKeystorePassword')
+def fatoratiKeyAliasValue = System.getenv('FATORATI_KEY_ALIAS') ?: project.findProperty('fatoratiKeyAlias')
+def fatoratiKeyPassword = System.getenv('FATORATI_KEY_PASSWORD') ?: project.findProperty('fatoratiKeyPassword')
+def fatoratiHasSigning = [fatoratiKeystore, fatoratiKeystorePassword, fatoratiKeyAliasValue, fatoratiKeyPassword].every { it }
+
 android {
     namespace = "com.fatorati.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +31,8 @@ android {
         applicationId = "com.fatorati.app"
         minSdkVersion = rootProject.ext.minSdkVersion
         targetSdkVersion = rootProject.ext.targetSdkVersion
-        versionCode 3
-        versionName "2.1.0"
+        versionCode fatoratiVersionCode
+        versionName fatoratiVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,12 +40,32 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    if (fatoratiHasSigning) {
+        signingConfigs {
+            release {
+                storeFile file(fatoratiKeystore)
+                storePassword fatoratiKeystorePassword
+                keyAlias fatoratiKeyAliasValue
+                keyPassword fatoratiKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (fatoratiHasSigning) signingConfig signingConfigs.release
         }
+    }
+}
+
+/** CI reads these one-line outputs to prove the build agrees with package.json. */
+tasks.register('printVersionInfo') {
+    doLast {
+        println "FATORATI_VERSION_NAME=${android.defaultConfig.versionName}"
+        println "FATORATI_VERSION_CODE=${android.defaultConfig.versionCode}"
+        println "FATORATI_SIGNED=${fatoratiHasSigning}"
     }
 }
 
@@ -30,17 +74,3 @@ repositories {
         dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
     }
 }
-
-dependencies {
-    implementation fileTree(include: ['*.jar'], dir: 'libs')
-    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
-    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
-    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
-    implementation project(':capacitor-android')
-    testImplementation "junit:junit:$junitVersion"
-    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
-    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
-    implementation project(':capacitor-cordova-android-plugins')
-}
-
-apply from: 'capacitor.build.gradle'

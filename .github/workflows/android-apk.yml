@@ -31,38 +31,45 @@ jobs:
       # High and critical advisories fail the build; the lockfile is the source of truth.
       - run: pnpm audit --audit-level high
       - run: pnpm build
-      - run: pnpm cap:sync android
 
-      - name: Build debug APK
+      # capacitor.build.gradle / capacitor.settings.gradle are tracked, so a stale
+      # copy silently ships the wrong plugin set. cap sync must be a no-op here.
+      - name: Verify the native project is in sync with Capacitor
+        run: |
+          set -euo pipefail
+          pnpm cap:sync android
+          if ! git diff --quiet -- android; then
+            echo '::error::cap sync changed tracked native files; run "pnpm cap:sync android" and commit the result'
+            git --no-pager diff -- android
+            exit 1
+          fi
+
+      - name: Prepare the Android build
         working-directory: android
         run: |
           chmod +x gradlew
           echo "sdk.dir=$ANDROID_HOME" > local.properties
-          ./gradlew assembleDebug --no-daemon --stacktrace
 
-      # The plugin manifest declares SCHEDULE_EXACT_ALARM; the app removes it with
-      # tools:node="remove" because reminders are deliberately inexact. This checks
-      # what the Android manifest merger actually produced.
-      - name: Verify the merged Android manifest
+      # versionName comes from package.json and versionCode from
+      # android/version.properties; this proves the Android build agrees.
+      - name: Verify version consistency
         working-directory: android
         run: |
           set -euo pipefail
-          manifest=$(find app/build/intermediates -name AndroidManifest.xml -path '*merged_manifest*' | head -1)
-          while [ -z "$manifest" ]; do
-            manifest=$(find app/build/intermediates -name AndroidManifest.xml | head -1)
-            break
-          done
-          echo "merged manifest: $manifest"
-          test -s "$manifest"
-          grep -q 'POST_NOTIFICATIONS' "$manifest"
-          if grep -qE 'SCHEDULE_EXACT_ALARM|USE_EXACT_ALARM' "$manifest"; then
-            echo '::error::exact-alarm permission leaked into the merged manifest'
-            exit 1
-          fi
-          if grep -q 'android.permission.INTERNET' "$manifest"; then
-            echo '::error::INTERNET permission leaked into the merged manifest'
-            exit 1
-          fi
+          pkg_name=$(node -p "require('../package.json').version")
+          pkg_code=$(node -p "require('fs').readFileSync('version.properties','utf8').match(/versionCode=(\d+)/)[1]")
+          info=$(./gradlew printVersionInfo --no-daemon --console=plain -q)
+          echo "$info"
+          build_name=$(printf '%s\n' "$info" | sed -n 's/^FATORATI_VERSION_NAME=//p' | tail -1)
+          build_code=$(printf '%s\n' "$info" | sed -n 's/^FATORATI_VERSION_CODE=//p' | tail -1)
+          build_signed=$(printf '%s\n' "$info" | sed -n 's/^FATORATI_SIGNED=//p' | tail -1)
+          test "$build_name" = "$pkg_name" || { echo "::error::versionName $build_name (Gradle) != $pkg_name (package.json)"; exit 1; }
+          test "$build_code" = "$pkg_code" || { echo "::error::versionCode $build_code (Gradle) != $pkg_code (version.properties)"; exit 1; }
+          test "$build_signed" = "false" || { echo '::error::CI must not have signing secrets; the release artifacts here are unsigned'; exit 1; }
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       # R8/minify/shrinkResources only run in release, so this catches keep-rule
       # regressions before a signed build. The APK is unsigned and not published.
@@ -70,8 +77,64 @@ jobs:
         working-directory: android
         run: ./gradlew assembleRelease --no-daemon --stacktrace
 
+      # Play only accepts an .aab for new apps. This bundle is unsigned: the owner
+      # signs the upload with their own key (see README -> Release build).
+      - name: Build release App Bundle (unsigned .aab)
+        working-directory: android
+        run: ./gradlew bundleRelease --no-daemon --stacktrace
+
+      # Permissions must be exactly the reviewed set. The plugin manifest declares
+      # SCHEDULE_EXACT_ALARM and the haptics plugin used to declare VIBRATE, so the
+      # allowlist is what keeps the shipped manifest honest.
+      - name: Verify the merged release manifest permissions
+        working-directory: android
+        run: |
+          set -euo pipefail
+          manifest=$(find app/build/intermediates -path '*merged_manifest*/release/AndroidManifest.xml' | head -1)
+          if [ -z "$manifest" ]; then
+            manifest=$(find app/build/intermediates -name AndroidManifest.xml -path '*release*' | head -1)
+          fi
+          echo "merged manifest: $manifest"
+          test -s "$manifest"
+
+          perms=$(tr '\n' ' ' < "$manifest" \
+            | grep -o 'uses-permission[^>]*android:name="[^"]*"' \
+            | sed 's/.*android:name="\([^"]*\)".*/\1/' | sort -u)
+          echo "permissions in the merged release manifest:"
+          printf '%s\n' "$perms" | sed 's/^/  /'
+
+          # One permission per line, so the match below is an exact string compare.
+          allow="
+          android.permission.POST_NOTIFICATIONS
+          android.permission.USE_BIOMETRIC
+          android.permission.USE_FINGERPRINT
+          android.permission.RECEIVE_BOOT_COMPLETED
+          android.permission.WAKE_LOCK
+          com.fatorati.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+          for permission in $perms; do
+            printf '%s\n' "$allow" | sed 's/^ *//' | grep -qx "$permission" \
+              || { echo "::error::$permission is not in the reviewed allowlist; justify it or remove the dependency that adds it"; exit 1; }
+          done
+
+          for forbidden in INTERNET READ_EXTERNAL_STORAGE WRITE_EXTERNAL_STORAGE MANAGE_EXTERNAL_STORAGE \
+                           SCHEDULE_EXACT_ALARM USE_EXACT_ALARM ACCESS_FINE_LOCATION ACCESS_COARSE_LOCATION \
+                           CAMERA RECORD_AUDIO READ_CONTACTS QUERY_ALL_PACKAGES; do
+            if printf '%s\n' "$perms" | grep -q "android.permission.$forbidden"; then
+              echo "::error::$forbidden must not ship in this app"; exit 1
+            fi
+          done
+
+          printf '%s\n' "$perms" | grep -q 'android.permission.POST_NOTIFICATIONS' \
+            || { echo '::error::POST_NOTIFICATIONS is missing; subscription reminders cannot work'; exit 1; }
+
       - uses: actions/upload-artifact@v7
         with:
           name: fatorati-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: fatorati-aab-unsigned
+          path: android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error

@@ -13,6 +13,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "version": "node scripts/version.mjs",
     "cap:sync": "cap sync",
     "cap:open:android": "cap open android",
     "test": "tsx --test tests/*.test.ts",

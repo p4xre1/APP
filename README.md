@@ -235,7 +235,7 @@ Requirements: Node 22+, pnpm 10.34.3, **Java 21**, Android SDK platform 36/build
 ```sh
 pnpm install
 pnpm exec tsc --noEmit
-pnpm test          # 47 Node tests: security, backup, tax, numbering, limits
+pnpm test          # Node tests: security, backup, subscriptions, tax, numbering, limits
 pnpm build
 pnpm cap:sync android
 cd android
@@ -248,26 +248,92 @@ unchanged by it. `pnpm preview` serves the production bundle locally.
 
 APK path: `android/app/build/outputs/apk/debug/app-debug.apk`. The retained GitHub Android workflow uses Java 21 and fail-fast install/typecheck/tests/build/sync/Gradle steps. No retries or failure suppression.
 
-### Release signing — never commit secrets
+### Release build — signed .aab with your upload key
 
-Release enables R8 `minifyEnabled` and `shrinkResources`; Capacitor bridge/plugin reflection rules are retained. Create a signing key **outside this repository**, with interactive password prompts:
+Release enables R8 `minifyEnabled` and `shrinkResources`; Capacitor bridge/plugin
+reflection rules are retained. Play only accepts an **Android App Bundle (.aab)**
+for new apps, and the bundle must be signed with your **upload key**.
+
+**1. Versioning.** `package.json` holds `version` (source of truth for
+`versionName`) and `android/version.properties` holds `versionCode`. Nothing else
+may hard-code them, and CI fails if the Android build disagrees with
+`package.json`.
 
 ```sh
-keytool -genkeypair -v -keystore "$HOME/fatorati-release.jks" \
-  -alias fatorati -keyalg RSA -keysize 3072 -validity 10000
-# After the build and sync steps above:
-cd android
-./gradlew assembleRelease --stacktrace
-# Replace <version> with your installed Android build-tools version:
-"$ANDROID_HOME/build-tools/<version>/zipalign" -p -f 4 \
-  app/build/outputs/apk/release/app-release-unsigned.apk /tmp/fatorati-aligned.apk
-"$ANDROID_HOME/build-tools/<version>/apksigner" sign \
-  --ks "$HOME/fatorati-release.jks" --ks-key-alias fatorati \
-  --out /tmp/fatorati-release.apk /tmp/fatorati-aligned.apk
-"$ANDROID_HOME/build-tools/<version>/apksigner" verify --verbose /tmp/fatorati-release.apk
+pnpm version                       # show versionName / versionCode
+pnpm version 2.2.0                 # set versionName, versionCode += 1
+pnpm version 2.2.0 --code 7        # set both (the code may only increase)
 ```
 
-Keep secure offline copies of the keystore and passwords; future updates need the same signing key. Do not put passwords on command lines, in source or chat. Keystores and `keystore.properties` are ignored by Git. These are instructions, **not a claim that a release build/signing was executed here**.
+**Rule: `versionCode` must increase for every Play upload.** Play rejects an
+upload whose `versionCode` is not strictly higher than the last one published, so
+always bump it in the same commit as the change you are shipping.
+
+**2. Upload key — outside the repository.** Create it once, with interactive
+prompts so no password reaches the shell history:
+
+```sh
+keytool -genkeypair -v -keystore "$HOME/fatorati-upload.jks" \
+  -alias fatorati -keyalg RSA -keysize 3072 -validity 10000
+```
+
+Keep several offline copies of the keystore and passwords: every future update has
+to be signed with the same upload key. `*.jks`, `*.keystore` and
+`keystore.properties` are ignored by Git, and nothing in this repository contains
+key material.
+
+**3. Credentials at build time — environment or `~/.gradle/gradle.properties`.**
+`android/app/build.gradle` reads the four values below and, when all four are
+present, signs `bundleRelease`/`assembleRelease` with the upload key. When they
+are absent the same tasks still build, just unsigned — which is what CI does.
+Never commit these, never pass passwords on the command line, and never put them
+in CI logs.
+
+```sh
+# preferred: environment variables for one build
+export FATORATI_KEYSTORE="$HOME/fatorati-upload.jks"
+export FATORATI_KEYSTORE_PASSWORD='...'   # from your password manager
+export FATORATI_KEY_ALIAS=fatorati
+export FATORATI_KEY_PASSWORD='...'
+
+# or, once per machine, keep them out of the repository entirely:
+# ~/.gradle/gradle.properties   (fatoratiKeystore, fatoratiKeystorePassword,
+#                                fatoratiKeyAlias, fatoratiKeyPassword)
+```
+
+**4. Build and verify the signed bundle.**
+
+```sh
+pnpm install --frozen-lockfile
+pnpm exec tsc --noEmit && pnpm test && pnpm audit --audit-level high && pnpm build
+pnpm cap:sync android
+cd android
+./gradlew printVersionInfo --no-daemon   # FATORATI_VERSION_NAME / _CODE / _SIGNED
+./gradlew bundleRelease --no-daemon      # -> app/build/outputs/bundle/release/app-release.aab
+"$ANDROID_HOME/build-tools/<version>/jarsigner" -verify -verbose -certs \
+  app/build/outputs/bundle/release/app-release.aab | tail -5
+```
+
+`FATORATI_SIGNED=true` and a `jar verified` line mean the bundle carries your
+upload key. Upload that `.aab` to the Play Console (internal testing first).
+
+**5. How Play App Signing fits in.** With Play App Signing, Google holds the
+**app signing key** that actually signs what users install; the key you keep is
+the **upload key** that authenticates your upload. Result: the upload key can be
+reset from the Play Console if it is lost or compromised, and the app signing key
+never has to be on your machine. If you ever need a device-installable APK signed
+with your own key (for side-loading or QA), build and sign one separately — Play
+does not accept APKs whose signature does not match the enrolled upload key:
+
+```sh
+./gradlew assembleRelease --no-daemon            # signed when the four values are set
+"$ANDROID_HOME/build-tools/<version>/apksigner" verify --verbose \
+  app/build/outputs/apk/release/app-release.apk
+```
+
+These are instructions, **not a claim that a release build or signing was
+executed here**; this sandbox has no Android SDK, so CI builds the artifacts
+unsigned and the owner does the signing step on their machine.
 
 ### Browser regression harness (not Android)
 

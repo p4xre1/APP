@@ -1,84 +1,92 @@
 import { t } from '../i18n'
-import { getPreferences, accentText } from './preferences'
-import { number, formatDate } from './format'
+import { getPreferences } from './preferences'
 import { sessionGuard } from './vault'
-import type { Business, Customer, Invoice, Estimate } from '../store/types'
-import { money } from './fatorati'
-import type { Currency } from './fatorati'
+import { documentTemplate } from './templates'
+import { settingsRegion } from './taxGuide'
+import { buildDocumentModel, layoutDocument, paintPage, PAGE_HEIGHT, PAGE_WIDTH, type Measure, type PaintContext } from './template-render'
 import { shareFile } from './share-file'
+import type { Currency } from './fatorati'
+import type { Business, Customer, Estimate, Invoice, Settings } from '../store/types'
 
-/** Render using bundled Inter/Tajawal fonts; no remote font download is needed. */
-export async function shareInvoicePdf(invoice: Invoice | Estimate, business: Business | null, customer?: Customer, currency: Currency = invoice.currency || getPreferences().defaultCurrency): Promise<void> {
-  const guard = sessionGuard(), prefs=getPreferences(), language=invoice.language||prefs.language
-  const tr = (key:string) => t(key,{},language)
-  const useColor = invoice.pdfColor ?? prefs.pdfColor
-  const fontFamily=language==='ar'?'Tajawal':'Inter'
+const INK = '#0b1220'
+
+/** Decodes a data URL once per document; a broken image never stops the PDF. */
+async function decodeImage(src: string): Promise<CanvasImageSource | null> {
+  try {
+    const image = new Image()
+    image.src = src
+    await image.decode()
+    return image
+  } catch { return null }
+}
+
+/**
+ * Renders a document to PDF bytes with the existing pipeline: the template model is
+ * painted onto a canvas page, each page becomes a PNG inside jsPDF. Fonts are the
+ * bundled Inter/Tajawal files - nothing is downloaded.
+ */
+export async function buildInvoicePdf(
+  doc: Invoice | Estimate,
+  business: Business | null,
+  customer?: Customer,
+  currency: Currency = doc.currency || getPreferences().defaultCurrency,
+  settings?: Settings | null,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const guard = sessionGuard(), prefs = getPreferences()
+  const language = doc.language || prefs.language
+  const region = settingsRegion(settings)
+  const template = documentTemplate(doc.template, region)
+  const model = buildDocumentModel({
+    kind: 'expiryDate' in doc ? 'estimate' : 'invoice',
+    document: doc, business, customer, region, currency, language, template,
+    appAccent: prefs.pdfColor ? prefs.accent : INK,
+  })
+
+  const fontFamily = language === 'ar' ? 'Tajawal' : 'Inter'
   await document.fonts.load(`28px "${fontFamily}"`)
   guard()
-  const { jsPDF } = await import('jspdf')
-  const pdf = new jsPDF({ compress: true })
+
   const canvas = document.createElement('canvas')
-  canvas.width = 1240; canvas.height = 1754
+  canvas.width = PAGE_WIDTH
+  canvas.height = PAGE_HEIGHT
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('PDF rendering is unavailable on this device.')
-  const margin = 80, lineHeight = 42
-  let y = margin, page = 0
-  const reset = () => {
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height)
-    ctx.fillStyle = useColor ? prefs.accent : '#111111'; ctx.fillRect(0,0,canvas.width,60)
-    ctx.fillStyle = useColor ? accentText(prefs.accent) : '#ffffff'; ctx.font=`24px ${fontFamily}`; ctx.textAlign='center'; ctx.fillText(tr('Fatorati'),canvas.width/2,38)
-    ctx.fillStyle = '#111827'; ctx.font = `28px ${fontFamily}`; ctx.textBaseline = 'top'
-    y = margin
+  const measure: Measure = (value, font) => { ctx.font = font; return ctx.measureText(value).width }
+  const pages = layoutDocument(model, { measure })
+
+  const images = new Map<string, CanvasImageSource>()
+  for (const op of pages.flatMap(page => page.ops)) {
+    if (op.kind !== 'image' || images.has(op.src)) continue
+    const decoded = await decodeImage(op.src)
+    if (decoded) images.set(op.src, decoded)
   }
-  const flush = () => {
-    if (page++) pdf.addPage()
-    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, 210, 297, undefined, 'FAST')
-  }
-  const line = (text: string) => {
-    if (y + lineHeight > canvas.height - margin) { flush(); reset() }
-    const rtl = language === 'ar'
-    ctx.direction = rtl ? 'rtl' : 'ltr'; ctx.textAlign = rtl ? 'right' : 'left'
-    ctx.fillText(text, rtl ? canvas.width - margin : margin, y)
-    y += lineHeight
-  }
-  reset()
-  const rate = Number(invoice.taxRate) || 0
-  const content = [
-    `${tr('expiryDate' in invoice ? 'Estimate' : 'Invoice')} ${invoice.number}`, '',
-    business?.name || tr('Your Business'), business?.ownerName || '',
-    `${business?.address || ''} ${business?.city || ''}`,
-    `${business?.phone || ''} ${business?.email || ''}`,
-    business?.taxNumber ? `${tr('Tax number')}: ${business.taxNumber}` : '', '',
-    tr('Customer'), customer?.name || invoice.customerId,
-    `${customer?.address || ''} ${customer?.city || ''}`,
-    `${customer?.email || ''} ${customer?.phone || ''}`,
-    customer?.taxNumber ? `${tr('Tax number')}: ${customer.taxNumber}` : '', '',
-    `${tr('Date and time')}: ${formatDate(invoice.occurredAt||invoice.createdAt,true,language)}`,
-    `${tr('Issue date')}: ${formatDate(invoice.issueDate,false,language)}`,
-    `${tr('expiryDate' in invoice?'Expiry date':'Due date')}: ${formatDate('expiryDate' in invoice?invoice.expiryDate:invoice.dueDate,false,language)}`,
-    `${tr('Status')}: ${tr(invoice.status)}`, '', tr('Items'),
-    ...invoice.items.flatMap(item => [item.description, `${number(item.quantity,language)} × ${money(item.unitPrice,currency,false,language)} = ${money(item.total,currency,false,language)}`, '']),
-    `${tr('Subtotal')}: ${money(invoice.subtotal,currency,false,language)}`,
-    `${tr('Tax')}${rate ? ` ${number(rate,language)}%` : ''}: ${money(invoice.tax,currency,false,language)}`,
-    `${tr('Total')}: ${money(invoice.total,currency,false,language)}`,
-    'paidAt' in invoice && invoice.paidAt ? `${tr('Paid on')}: ${formatDate(invoice.paidAt,false,language)}` : '', '', tr('Notes'), invoice.notes,
-  ].join('\n')
-  // Wrap long descriptions/notes and add pages instead of clipping invoices.
-  for (const paragraph of content.split(/\r?\n/)) {
-    let buffer = ''
-    for (const word of paragraph.split(/\s+/)) {
-      const candidate = buffer ? `${buffer} ${word}` : word
-      if (ctx.measureText(candidate).width <= canvas.width - 2 * margin) { buffer = candidate; continue }
-      if (buffer) line(buffer)
-      buffer = ''
-      for (const character of word) {
-        if (ctx.measureText(buffer + character).width > canvas.width - 2 * margin) { line(buffer); buffer = '' }
-        buffer += character
-      }
-    }
-    line(buffer)
-  }
-  flush()
   guard()
-  await shareFile(`${invoice.number}.pdf`, new Uint8Array(pdf.output('arraybuffer')), 'application/pdf')
+
+  const { jsPDF } = await import('jspdf')
+  const pdf = new jsPDF({ compress: true })
+  pages.forEach((page, index) => {
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, PAGE_WIDTH, PAGE_HEIGHT)
+    paintPage(ctx as unknown as PaintContext, page, images)
+    if (index) pdf.addPage()
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, 210, 297, undefined, 'FAST')
+  })
+  return new Uint8Array(pdf.output('arraybuffer'))
 }
+
+/** Renders and hands the file to Android's share sheet; unchanged public entry. */
+export async function shareInvoicePdf(
+  doc: Invoice | Estimate,
+  business: Business | null,
+  customer?: Customer,
+  currency: Currency = doc.currency || getPreferences().defaultCurrency,
+  settings?: Settings | null,
+): Promise<void> {
+  const guard = sessionGuard()
+  const bytes = await buildInvoicePdf(doc, business, customer, currency, settings)
+  guard()
+  await shareFile(`${doc.number}.pdf`, bytes, 'application/pdf')
+}
+
+/** Key of the sample payment method the picker preview shows. */
+export const SAMPLE_PAYMENT_METHOD = 'Bank transfer'

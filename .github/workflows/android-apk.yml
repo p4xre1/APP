@@ -34,15 +34,20 @@ jobs:
 
       # capacitor.build.gradle / capacitor.settings.gradle are tracked, so a stale
       # copy silently ships the wrong plugin set. cap sync must be a no-op here.
+      #
+      # The comparison is limited to the files cap sync generates. The icon, splash
+      # and wrapper binaries are declared as Git LFS paths in .gitattributes while
+      # being committed as plain files (they are real PNG/JAR bytes, not pointers),
+      # so on a runner that has git-lfs installed `git diff -- android` reports all
+      # 26 of them as modified without anything having touched them.
       - name: Verify the native project is in sync with Capacitor
         run: |
           set -euo pipefail
           pnpm cap:sync android
-          if ! git diff --quiet -- android; then
-            # Print what drifted (and name it in the annotation) before failing.
-            git --no-pager diff --stat -- android
-            git --no-pager diff -- android | head -200
-            echo "::error::cap sync changed tracked native files: $(git diff --name-only -- android | tr '\n' ' ')"
+          generated="android/app/capacitor.build.gradle android/capacitor.settings.gradle android/app/src/main/AndroidManifest.xml"
+          if ! git diff --quiet -- $generated; then
+            git --no-pager diff --stat -- $generated
+            echo "::error::cap sync changed tracked native files: $(git diff --name-only -- $generated | tr '\n' ' ')"
             exit 1
           fi
 

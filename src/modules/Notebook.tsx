@@ -1,21 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  Archive, ArchiveRestore, BellRing, CheckCircle2, Lightbulb, ListTodo, Pencil, Pin, PinOff, Plus, Search,
-  StickyNote, Trash2, X,
-} from 'lucide-react'
+import { BellRing, CheckCircle2, ListTodo, Pencil, Plus, Search, X } from 'lucide-react'
 import { showAlert, askConfirm } from '../lib/dialogs'
+import NoteList, { TYPE_LABEL } from '../components/NoteList'
 import { errorText, useI18n } from '../i18n'
 import { useFatorati } from '../store/useFatorati'
-import { formatDate } from '../lib/format'
 import { requestReminderPermission, reminderPermission } from '../lib/notifications'
 import { clearDraft, createDraftSaver, draftOf, readDraft, saveDraft, type NoteDraft } from '../lib/notes-draft'
 import { takeIntent } from '../lib/navigation-intent'
 import {
   DEFAULT_FILTERS, MAX_NOTE_BODY, MAX_NOTE_TITLE, MAX_TAGS, NOTE_COLORS, NOTE_STATES, NOTE_TYPES, REMINDER_CHOICES, REMINDER_LABEL,
-  asTask, filterNotes, formatTags, isNoteColor, noteColorHex, noteCounts, noteExcerpt, noteTags, noteTitle, parseTags, sortNotes, validateNote,
+  asTask, filterNotes, formatTags, isNoteColor, noteCounts, noteTags, parseTags, sortNotes, validateNote,
   type DatedFilter, type NoteFilters, type NoteSort, type NoteState,
 } from '../lib/notes'
-import { isISODate, todayISO } from '../lib/subscriptions'
+import { isISODate } from '../lib/subscriptions'
 import type { ModuleKey, Note, NoteColorId, NoteType } from '../store/types'
 
 const inputClass = 'w-full px-3 py-2 border border-line-strong rounded-lg text-[13.5px] bg-surface text-ink outline-none transition-colors placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-brand/15'
@@ -119,15 +116,6 @@ function editorOfDraft(draft: NoteDraft): EditorState {
   }
 }
 
-/** Row icon per type: the label always sits next to it, so colour is never the only cue. */
-function TypeIcon({ type, className }: { type: NoteType; className?: string }) {
-  if (type === 'task') return <ListTodo className={className} />
-  if (type === 'note') return <StickyNote className={className} />
-  return <Lightbulb className={className} />
-}
-
-const TYPE_LABEL: Record<NoteType, string> = { idea: 'Idea', task: 'Task', note: 'Note' }
-
 export default function Notebook({ onNavigate }: { onNavigate?: (key: ModuleKey) => void }) {
   const { t, language } = useI18n()
   const { notes, customers, invoices, projects, addNote, updateNote, deleteNote } = useFatorati()
@@ -145,8 +133,17 @@ export default function Notebook({ onNavigate }: { onNavigate?: (key: ModuleKey)
   const visible = useMemo(() => sortNotes(filterNotes(notes, filters), sort), [notes, filters, sort])
   const tags = useMemo(() => noteTags(notes), [notes])
   const counts = useMemo(() => noteCounts(notes), [notes])
-  const colors = useMemo(() => new Map(NOTE_COLORS.map(color => [color.id, color])), [])
-  const reminderLabel = (note: Note) => (note.remindMinutesBefore === undefined ? null : t(REMINDER_LABEL[note.remindMinutesBefore] || 'Reminder'))
+  // Linked record names by note id: a deleted target simply has no entry.
+  const links = useMemo(() => {
+    const names = new Map<string, string>()
+    for (const note of notes) {
+      const linked = customers.find(row => row.id === note.linkedCustomerId)?.name
+        || invoices.find(row => row.id === note.linkedInvoiceId)?.number
+        || projects.find(row => row.id === note.linkedProjectId)?.name
+      if (linked) names.set(note.id, linked)
+    }
+    return names
+  }, [notes, customers, invoices, projects])
 
   /** Autosave: a debounced write, plus a flush when the app goes to the background. */
   const queueDraft = useCallback((next: EditorState) => { saver.current?.push(draftOfEditor(next)) }, [])
@@ -234,9 +231,9 @@ export default function Notebook({ onNavigate }: { onNavigate?: (key: ModuleKey)
 
   const filterRow = <div className="rounded-xl border border-line bg-surface p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
     <div className="flex flex-wrap items-center gap-2">
-      <div className="flex min-w-[12rem] flex-1 items-center gap-2 rounded-lg bg-canvas px-3 py-2">
-        <Search className="h-4 w-4 text-faint" aria-hidden="true" />
-        <input type="search" aria-label={t('Search notes...')} placeholder={t('Search notes...')} value={filters.query} onChange={event => setFilters({ ...filters, query: event.target.value })} className="flex-1 bg-transparent text-[13.5px] outline-none" />
+      <div className="flex min-w-[12rem] flex-1 items-center gap-2 rounded-lg bg-canvas ps-3">
+        <Search className="h-4 w-4 shrink-0 text-faint" aria-hidden="true" />
+        <input type="search" aria-label={t('Search notes...')} placeholder={t('Search notes...')} value={filters.query} onChange={event => setFilters({ ...filters, query: event.target.value })} className="min-h-12 flex-1 bg-transparent text-[13.5px] outline-none" />
       </div>
       <select aria-label={t('Type')} value={filters.type} onChange={event => setFilters({ ...filters, type: event.target.value as NoteType | 'all' })} className={`${inputClass} w-auto`}>
         <option value="all">{t('All types')}</option>
@@ -404,52 +401,15 @@ export default function Notebook({ onNavigate }: { onNavigate?: (key: ModuleKey)
 
     {notes.length > 0 && filterRow}
 
-    <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-      {visible.length === 0 ? (
-        <div className="px-5 py-12 text-center">
-          {notes.length === 0 ? <>
-            <StickyNote className="mx-auto h-8 w-8 text-faint" aria-hidden="true" />
-            <p className="mt-3 text-[13.5px] font-semibold text-ink">{t('Nothing in the notebook yet')}</p>
-            <p className="mx-auto mt-1 max-w-md text-[12.5px] text-muted">{t('Keep ideas, notes and tasks on this phone. Write a line with the quick box, give it a date and it also appears in the calendar next to your invoices and renewals. Everything stays encrypted on this device.')}</p>
-            <button onClick={() => void openCapture()} className="mt-4 inline-flex min-h-12 items-center gap-2 rounded-lg bg-brand px-3.5 py-2 text-[13px] font-semibold text-white shadow-sm transition-all hover:bg-brand-700 active:scale-[0.98]"><Plus className="h-4 w-4" />{t('Quick idea')}</button>
-          </> : <p className="text-[13px] text-muted">{t('No results')}</p>}
-        </div>
-      ) : (
-        <ul className="divide-y divide-line">
-          {visible.map(note => {
-            const color = colors.get(note.color || 'none')
-            const linked = customers.find(row => row.id === note.linkedCustomerId)?.name || invoices.find(row => row.id === note.linkedInvoiceId)?.number || projects.find(row => row.id === note.linkedProjectId)?.name
-            return <li key={note.id} className="p-4 hover:bg-canvas">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <button onClick={() => openEditor(note)} className="min-w-0 flex-1 text-start">
-                  <span className="flex items-center gap-2">
-                    {color?.hex && <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: color.hex }} />}
-                    <TypeIcon type={note.type} className="h-4 w-4 shrink-0 text-brand" />
-                    <span className={`truncate text-[13.5px] font-semibold text-ink ${note.done ? 'line-through' : ''}`}>{noteTitle(note) || t('Untitled note')}</span>
-                    {note.pinned && <Pin className="h-3.5 w-3.5 shrink-0 text-warn" aria-label={t('Pinned')} />}
-                  </span>
-                  {noteExcerpt(note) && <span className="mt-1 block text-[12.5px] text-muted">{noteExcerpt(note)}</span>}
-                  <span className="mt-1 flex flex-wrap items-center gap-x-2 text-[11.5px] text-faint">
-                    <span>{t(TYPE_LABEL[note.type])}{note.type === 'task' ? ` · ${note.done ? t('Done') : t('Open')}` : ''}</span>
-                    {note.date && <span>· {formatDate(note.date, false, language)}{note.time ? ` ${note.time}` : ''}</span>}
-                    {reminderLabel(note) && <span>· {t('Reminder')}: {reminderLabel(note)}</span>}
-                    {(note.tags || []).map(tag => <span key={tag} className="rounded-full bg-canvas px-2 py-0.5">#{tag}</span>)}
-                    {linked && <span>· {linked}</span>}
-                  </span>
-                </button>
-                <div className="flex items-center gap-1">
-                  {note.type === 'task' && <button disabled={busy} onClick={() => void toggleDone(note)} aria-label={note.done ? t('Mark as open') : t('Mark done')} className="grid h-12 w-12 place-items-center rounded-lg hover:bg-canvas"><CheckCircle2 className={`h-4 w-4 ${note.done ? 'text-emerald-brand' : 'text-muted'}`} /></button>}
-                  {note.type !== 'task' && <button disabled={busy} onClick={() => void convert(note)} aria-label={t('Convert idea to task')} className="grid h-12 w-12 place-items-center rounded-lg hover:bg-canvas"><ListTodo className="h-4 w-4 text-muted" /></button>}
-                  <button disabled={busy} onClick={() => void togglePin(note)} aria-label={note.pinned ? t('Unpin') : t('Pin to the top')} className="grid h-12 w-12 place-items-center rounded-lg hover:bg-canvas">{note.pinned ? <PinOff className="h-4 w-4 text-warn" /> : <Pin className="h-4 w-4 text-muted" />}</button>
-                  <button disabled={busy} onClick={() => void setArchived(note, !note.archived)} aria-label={note.archived ? t('Restore from archive') : t('Archive')} className="grid h-12 w-12 place-items-center rounded-lg hover:bg-canvas">{note.archived ? <ArchiveRestore className="h-4 w-4 text-muted" /> : <Archive className="h-4 w-4 text-muted" />}</button>
-                  <button disabled={busy} onClick={() => void remove(note)} aria-label={t('Delete')} className="grid h-12 w-12 place-items-center rounded-lg hover:bg-canvas"><Trash2 className="h-4 w-4 text-serious" /></button>
-                </div>
-              </div>
-            </li>
-          })}
-        </ul>
-      )}
-    </div>
+    <NoteList
+      notes={visible}
+      links={links}
+      handlers={{ onOpen: openEditor, onToggleDone: note => void toggleDone(note), onConvert: note => void convert(note), onTogglePin: note => void togglePin(note), onArchive: note => void setArchived(note, !note.archived), onDelete: note => void remove(note) }}
+      disabled={busy}
+      variant={notes.length === 0 ? 'empty' : 'none'}
+      archivedView={filters.archived}
+      onQuickIdea={() => void openCapture()}
+    />
 
     <p className="text-[12px] text-muted">{t('Notes are encrypted like every other record and travel in the encrypted backup. They are never added to the CSV or PDF exports.')}</p>
 

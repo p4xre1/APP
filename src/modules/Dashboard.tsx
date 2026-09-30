@@ -12,7 +12,7 @@ import { chartData } from '../lib/chart-data'
 import { useLastBackup } from '../lib/useLastBackup'
 import { hasPickedBackup } from '../lib/backup-picker'
 import { Card, SectionTitle, Btn } from '../components/kit'
-import EventIcon from '../components/EventIcon'
+import EventRow from '../components/EventRow'
 import { AreaChart, BarChart, Donut, Legend } from '../components/charts'
 import { SubscriptionAttentionBanner } from './Subscriptions'
 
@@ -22,6 +22,7 @@ export default function Dashboard({onNavigate}:{onNavigate:(key:ModuleKey)=>void
   // The same aggregation as the calendar, so the two can never disagree.
   const upcoming=useMemo(()=>upcomingItems({notes,invoices,subscriptions,estimates},{today,days:7}).slice(0,6),[notes,invoices,subscriptions,estimates,today])
   const upcomingTotal=useMemo(()=>upcomingItems({notes,invoices,subscriptions,estimates},{today,days:7}).length,[notes,invoices,subscriptions,estimates,today])
+  const openUpcoming=(item:CalendarItem)=>{const target=item.group==='notes'?'notebook':item.group==='invoices'?'invoices':item.group==='estimates'?'estimates':'subscriptions';setIntent(target,item.id);onNavigate(target)}
   const [range,setRange]=useState(8),[selected,setSelected]=useState(prefs.defaultCurrency)
   const currencies=[...new Set([prefs.defaultCurrency,...invoices.map(row=>row.currency||prefs.defaultCurrency),...expenses.map(row=>row.currency||prefs.defaultCurrency)])]
   const currency=currencies.includes(selected)?selected:prefs.defaultCurrency
@@ -54,18 +55,7 @@ export default function Dashboard({onNavigate}:{onNavigate:(key:ModuleKey)=>void
       {upcoming.length===0
         ? <p className="py-3 text-[13px] text-muted">{t('Nothing scheduled in the next 7 days.')}</p>
         : <ul className="divide-y divide-line">
-          {upcoming.map((item:CalendarItem)=><li key={item.key}>
-            <button onClick={()=>{setIntent(item.group==='notes'?'notebook':item.group==='invoices'?'invoices':item.group==='estimates'?'estimates':'subscriptions',item.id);onNavigate(item.group==='notes'?'notebook':item.group==='invoices'?'invoices':item.group==='estimates'?'estimates':'subscriptions')}} className="flex w-full min-h-12 items-center gap-3 py-2 text-start">
-              <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${item.overdue?'bg-serious-50 text-serious':'bg-brand-50 text-brand-700'}`}>
-                <EventIcon item={item} className="h-4 w-4"/>
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] font-semibold">{item.detail}</span>
-                <span className="block text-[11.5px] text-muted">{t(item.label)} · {formatDate(item.date,false,language)}{item.time?` ${item.time}`:''}</span>
-              </span>
-              {item.overdue&&<span className="rounded-full bg-serious-50 px-2 py-0.5 text-[11px] font-semibold text-serious">{t('Overdue')}</span>}
-            </button>
-          </li>)}
+          {upcoming.map((item:CalendarItem)=><li key={item.key} className="py-1"><EventRow item={item} onOpen={openUpcoming} showDate className="p-0 rounded-lg"/></li>)}
           {upcomingTotal>upcoming.length&&<li className="pt-2 text-[12px] text-muted">{t('{count} items in the next 7 days',{count:upcomingTotal})}</li>}
         </ul>}
     </Card>

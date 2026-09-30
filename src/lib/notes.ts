@@ -201,9 +201,13 @@ export function sortNotes(notes: Note[], sort: NoteSort): Note[] {
   return [...notes].sort((a, b) => {
     const pinned = Number(b.pinned === true) - Number(a.pinned === true)
     if (pinned !== 0) return pinned
-    const dated = Number(!a.date) - Number(!b.date)
-    if (a.date && b.date && a.date !== b.date) return a.date < b.date ? -1 : 1
-    if (dated !== 0) return dated
+    // Only the "by date" order is a timeline; the other orders stay chronological in
+    // their own key so "Last changed" really means the last one the user touched.
+    if (sort === 'date') {
+      const dated = Number(!a.date) - Number(!b.date)
+      if (dated !== 0) return dated
+      if (a.date && b.date && a.date !== b.date) return a.date < b.date ? -1 : 1
+    }
     const difference = key(b) - key(a)
     if (difference !== 0) return difference
     return a.id.localeCompare(b.id)

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { CalendarPlus, ChevronLeft, ChevronRight } from 'lucide-react'
-import EventIcon from '../components/EventIcon'
+import EventRow, { GROUP_LABEL } from '../components/EventRow'
+import MonthGrid from '../components/MonthGrid'
 import { useI18n, usePreferences } from '../i18n'
 import { useFatorati } from '../store/useFatorati'
 import { formatDate, locale } from '../lib/format'
@@ -12,8 +13,6 @@ import {
 import { reminderSettings } from '../lib/notifications'
 import { todayISO } from '../lib/subscriptions'
 import type { ModuleKey } from '../store/types'
-
-const GROUP_LABEL: Record<CalendarGroup, string> = { notes: 'Notes and tasks', invoices: 'Invoices', subscriptions: 'Subscriptions', estimates: 'Estimates' }
 
 export default function Calendar({ onNavigate }: { onNavigate?: (key: ModuleKey) => void }) {
   const { t, language } = useI18n()
@@ -85,42 +84,7 @@ export default function Calendar({ onNavigate }: { onNavigate?: (key: ModuleKey)
       </label>)}
     </div>
 
-    <div className="rounded-xl border border-line bg-surface p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-[15px] font-bold text-ink" aria-live="polite">{label}</h2>
-        <p className="text-[12px] text-muted">{t('Week starts on {day}', { day: t(`firstDay.${firstDay}`) })}</p>
-      </div>
-      <table className="w-full table-fixed border-collapse" aria-label={label}>
-        <thead>
-          <tr>{columns.map(column => <th key={column} scope="col" className="pb-1 text-center text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">{column}</th>)}</tr>
-        </thead>
-        <tbody>
-          {Array.from({ length: Math.ceil(days.length / 7) }, (_, week) => <tr key={week}>
-            {days.slice(week * 7, week * 7 + 7).map(day => {
-              const count = counts.get(day.date) ?? 0
-              const summary = daySummary(count)
-              const isToday = day.date === today
-              const isSelected = day.date === selected
-              return <td key={day.date} className="p-0.5 align-top">
-                <button onClick={() => { setSelected(day.date); setAdding(null) }}
-                  aria-label={`${formatDate(day.date, false, language)}: ${t(summary.key, { count: summary.count })}`}
-                  aria-current={isToday ? 'date' : undefined}
-                  className={`flex h-16 w-full flex-col items-center justify-center gap-1 rounded-lg border text-[13px] transition-colors ${isSelected ? 'border-brand bg-brand-50 text-brand-700' : isToday ? 'border-brand/40 bg-surface text-ink' : day.inMonth ? 'border-line bg-surface text-ink' : 'border-transparent bg-canvas text-faint'}`}>
-                  <span className={isToday ? 'font-bold' : ''}>{day.day}</span>
-                  {count > 0 && <span className="flex items-center gap-1">
-                    <span aria-hidden="true" className="flex gap-0.5">
-                      {Array.from({ length: Math.min(count, 3) }, (_, dot) => <span key={dot} className="h-1.5 w-1.5 rounded-full bg-brand" />)}
-                    </span>
-                    <span className="text-[10.5px] font-semibold text-muted">{count}</span>
-                  </span>}
-                </button>
-              </td>
-            })}
-          </tr>)}
-        </tbody>
-      </table>
-      <p className="mt-3 text-[12px] text-muted">{t('Each day shows its number of items, and every row is labelled for screen readers.')}</p>
-    </div>
+    <MonthGrid days={days} counts={counts} firstDay={firstDay} today={today} selected={selected} columns={columns} label={label} onSelect={date => { setSelected(date); setAdding(null) }} />
 
     <div className="rounded-xl border border-line bg-surface p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -145,20 +109,7 @@ export default function Calendar({ onNavigate }: { onNavigate?: (key: ModuleKey)
       {selectedItems.length === 0
         ? <p className="py-6 text-center text-[13px] text-muted">{t('Nothing on this day.')}</p>
         : <ul className="divide-y divide-line">
-          {selectedItems.map(item => <li key={item.key}>
-            <button onClick={() => open(item)} className="flex w-full min-h-12 items-center gap-3 p-3 text-start hover:bg-canvas">
-              <EventIcon item={item} className={`h-4 w-4 shrink-0 ${item.overdue ? 'text-serious' : 'text-brand'}`} />
-              <span className="min-w-0 flex-1">
-                <span className="flex flex-wrap items-center gap-2">
-                  <span className={`text-[13px] font-semibold ${item.done ? 'text-muted line-through' : 'text-ink'}`}>{t(item.label)}</span>
-                  {item.overdue && <span className="rounded-full bg-serious-50 px-2 py-0.5 text-[11px] font-semibold text-serious">{t('Overdue')}</span>}
-                  {item.time && <span className="text-[11.5px] text-muted">{item.time}</span>}
-                </span>
-                <span className="mt-0.5 block truncate text-[12px] text-muted">{item.detail}</span>
-              </span>
-              <span className="text-[11.5px] text-faint">{t(GROUP_LABEL[item.group])}</span>
-            </button>
-          </li>)}
+          {selectedItems.map(item => <li key={item.key}><EventRow item={item} onOpen={open} /></li>)}
         </ul>}
     </div>
 

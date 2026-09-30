@@ -17,7 +17,7 @@ import { isDated, noteTitle, noteTime } from './notes'
 import type { Estimate, Invoice, Note, Subscription } from '../store/types'
 
 /** Kinds of row the calendar can show. Each one has its own icon and its own label. */
-export type CalendarKind = 'note' | 'task' | 'invoice' | 'subscription' | 'estimate'
+export type CalendarKind = 'idea' | 'note' | 'task' | 'invoice' | 'subscription' | 'estimate'
 
 /** Filter toggles, one per group of rows. */
 export const CALENDAR_GROUPS = ['notes', 'invoices', 'subscriptions', 'estimates'] as const
@@ -148,7 +148,9 @@ export function collectCalendarItems(sources: CalendarSources, options: Calendar
     if (!isDated(note)) continue
     const time = noteTime(note)
     items.push({
-      key: `note:${note.id}`, kind: note.type === 'task' ? 'task' : 'note', group: 'notes', id: note.id,
+      // The kind keeps the note's own type, so an idea and a plain note never end up
+      // behind the same icon: the row shows icon *and* label.
+      key: `note:${note.id}`, kind: note.type, group: 'notes', id: note.id,
       date: note.date!, ...(time ? { time } : {}),
       label: note.type === 'task' ? 'Task' : note.type === 'note' ? 'Note' : 'Idea',
       detail: noteTitle(note), done: note.type === 'task' && note.done === true,

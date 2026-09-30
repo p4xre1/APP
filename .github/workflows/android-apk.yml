@@ -73,6 +73,12 @@ jobs:
           test "$build_name" = "$pkg_name" || { echo "::error::versionName $build_name (Gradle) != $pkg_name (package.json)"; exit 1; }
           test "$build_code" = "$pkg_code" || { echo "::error::versionCode $build_code (Gradle) != $pkg_code (version.properties)"; exit 1; }
           test "$build_signed" = "false" || { echo '::error::CI must not have signing secrets; the release artifacts here are unsigned'; exit 1; }
+          {
+            echo "### Version"
+            echo "- versionName \`$build_name\` (from package.json)"
+            echo "- versionCode \`$build_code\` (from android/version.properties)"
+            echo "- signed by CI: \`$build_signed\` (the owner signs the upload)"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build debug APK
         working-directory: android
@@ -145,6 +151,13 @@ jobs:
 
           printf '%s\n' "$perms" | grep -q 'android.permission.POST_NOTIFICATIONS' \
             || { echo '::error::POST_NOTIFICATIONS is missing; subscription reminders cannot work'; exit 1; }
+
+          {
+            echo "### Permissions in the merged release manifest"
+            echo '```'
+            printf '%s\n' "$perms"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v7
         with:

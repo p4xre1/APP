@@ -76,7 +76,19 @@ jobs:
 
       - name: Build debug APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee "$RUNNER_TEMP/gradle-debug.log"
+
+      # The run summary cannot show a Gradle stack trace, so surface the first
+      # error lines as an annotation instead of leaving only "exit code 1".
+      - name: Report the Gradle error
+        if: failure()
+        run: |
+          log="$RUNNER_TEMP/gradle-debug.log"
+          [ -f "$log" ] || exit 0
+          message=$(grep -m 4 -E '^e: |error:|What went wrong|> Task .*FAILED|Caused by:' "$log" | head -c 900 | tr '\n' '|')
+          [ -n "$message" ] && echo "::error::$message" || true
 
       # R8/minify/shrinkResources only run in release, so this catches keep-rule
       # regressions before a signed build. The APK is unsigned and not published.

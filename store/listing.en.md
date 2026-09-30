@@ -39,7 +39,7 @@ BACKUP AND EXPORT
 Export an encrypted .fatorati backup (AES-256-GCM with a password you choose) and import it on another phone. Export customers, invoices, expenses and subscriptions to CSV, Excel or PDF. Note that those CSV/PDF/Excel files are not encrypted, so delete them when you are done with them.
 
 TAX ASSISTANT AND TAX GUIDE
-Fatorati includes general tax information for Morocco, France, Spain, Portugal and the United States, with field hints where you type invoice details and a guide with a "last reviewed" date. This is general information, not tax advice: check the current rules with your accountant or the tax authority before relying on them.
+Fatorati includes general tax information for Morocco and the United States, with field hints where you type invoice details and a guide with a "last reviewed" date. This is general information, not tax advice: check the current rules with your accountant or the tax authority before relying on them.
 
 SECURITY
 - 6-digit PIN, verifier only stored — the PIN itself is never kept
@@ -62,7 +62,7 @@ Fatorati is an offline business tool. It is not affiliated with, certified by or
 
 ```
 - Subscriptions: cycles, renewals, per-currency totals, Excel/PDF export, local reminders
-- Tax assistant and tax guide: Morocco, France, Spain, Portugal, United States (general information, not tax advice)
+- Tax assistant and tax guide: Morocco and the United States (general information, not tax advice)
 - About card in Settings: version, privacy policy, terms, support
 - Better contrast and larger touch targets
 - Clearer message when an export cannot be written for lack of storage

@@ -159,7 +159,7 @@ The exact list ships in `PRIVACY.md` and is enforced in CI.
 | Contains ads | No |
 | In-app purchases | No |
 | Price | Free |
-| Countries | Owner's decision; the app ships Arabic, English, French, Spanish and Portuguese, and its tax guide currently covers Morocco, the United States, France, Spain and Portugal (no country is excluded by the code) |
+| Countries | Owner's decision; the app ships Arabic, English, French, Spanish and Portuguese, and its tax guide currently covers Morocco and the United States (`TAX_REGIONS` in `src/lib/taxGuide.ts`; no country is excluded by the code) |
 | Contact email | `[SUPPORT EMAIL]` — the address that also goes into `src/lib/appConfig.ts` |
 | Privacy policy | `[PRIVACY URL]` — the hosted copy of `docs/legal/privacy.en.md` |
 

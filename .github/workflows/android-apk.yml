@@ -56,8 +56,8 @@ jobs:
         working-directory: android
         run: |
           set -euo pipefail
-          pkg_name=$(node -p "require('../package.json').version")
-          pkg_code=$(node -p "require('fs').readFileSync('version.properties','utf8').match(/versionCode=(\d+)/)[1]")
+          pkg_name=$(node --input-type=commonjs -p "require('../package.json').version")
+          pkg_code=$(node --input-type=commonjs -p "require('fs').readFileSync('version.properties','utf8').match(/versionCode=(\d+)/)[1]")
           info=$(./gradlew printVersionInfo --no-daemon --console=plain -q)
           echo "$info"
           build_name=$(printf '%s\n' "$info" | sed -n 's/^FATORATI_VERSION_NAME=//p' | tail -1)

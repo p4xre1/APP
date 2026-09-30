@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
+import { TAX_REGIONS, TAX_REGION_LABEL } from '../src/lib/taxGuide'
 
 const listing = (language: 'en' | 'fr' | 'ar') => readFileSync(`store/listing.${language}.md`, 'utf8')
 const blocks = (text: string) => [...text.matchAll(/## [^\n]+\n\n```\n([\s\S]*?)```/g)].map(match => match[1].trim())
@@ -84,4 +85,33 @@ test('the console answer sheet covers every declaration Play asks for', () => {
     assert.ok(answers.includes(permission), `missing justification for ${permission}`)
   }
   assert.equal(answers.includes('DGI compliant'), false)
+})
+
+test('the listings claim exactly the tax regions the code ships', () => {
+  // The app supports five interface languages but only two tax regions; the copy
+  // must never promise guidance that does not exist.
+  assert.deepEqual(TAX_REGIONS, ['MA', 'US'])
+  assert.deepEqual(TAX_REGIONS.map(region => TAX_REGION_LABEL[region]), ['Morocco', 'United States'])
+  const names = {
+    en: ['Morocco', 'United States'],
+    fr: ['Maroc', 'États-Unis'],
+    ar: ['المغرب', 'الولايات المتحدة'],
+  } as const
+  const notShipped = ['France', 'French', 'Spain', 'Spanish', 'Portugal', 'Portuguese', 'Espagne', 'espagnol', 'espagnole', 'البرتغال', 'البرتغالية', 'إسبانيا', 'الإسبانية', 'فرنسا', 'الفرنسية']
+  const taxLine = /tax guide|tax assistant|guide fiscal|fiscaux|fiscales|ضريب/i
+  for (const language of languages) {
+    const lines = listing(language).split('\n').filter(line => taxLine.test(line))
+    assert.ok(lines.length >= 2, `${language} must describe the tax guide and list it in "What's new"`)
+    const joined = lines.join('\n')
+    for (const name of names[language]) {
+      assert.ok(joined.includes(name), `${language}: the tax copy must name ${name}`)
+    }
+    for (const line of lines) {
+      for (const name of notShipped) {
+        assert.equal(line.includes(name), false, `${language}: "${name}" is not a shipped tax region -> ${line}`)
+      }
+    }
+  }
+  const answers = readFileSync('docs/PLAY-CONSOLE-ANSWERS.md', 'utf8')
+  assert.ok(answers.includes('its tax guide currently covers Morocco and the United States'))
 })

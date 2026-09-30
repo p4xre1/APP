@@ -40,7 +40,7 @@ SAUVEGARDE ET EXPORT
 Exportez une sauvegarde chiffrée .fatorati (AES-256-GCM avec un mot de passe que vous choisissez) et importez-la sur un autre téléphone. Exportez clients, factures, dépenses et abonnements en CSV, Excel ou PDF. Attention : ces fichiers CSV/PDF/Excel ne sont pas chiffrés, supprimez-les lorsque vous n'en avez plus besoin.
 
 ASSISTANT ET GUIDE FISCAUX
-Fatorati contient des informations fiscales générales pour le Maroc, la France, l'Espagne, le Portugal et les États-Unis, avec des indications dans les formulaires de facture et un guide portant une date de « dernière révision ». Il s'agit d'informations générales, et non d'un conseil fiscal : vérifiez les règles en vigueur auprès de votre comptable ou de l'administration fiscale avant de vous y fier.
+Fatorati contient des informations fiscales générales pour le Maroc et les États-Unis, avec des indications dans les formulaires de facture et un guide portant une date de « dernière révision ». Il s'agit d'informations générales, et non d'un conseil fiscal : vérifiez les règles en vigueur auprès de votre comptable ou de l'administration fiscale avant de vous y fier.
 
 SÉCURITÉ
 - Code PIN à 6 chiffres, seul un vérificateur est conservé — le PIN lui-même n'est jamais stocké
@@ -63,7 +63,7 @@ Fatorati est un outil de gestion hors ligne. Il n'est ni affilié, ni certifié,
 
 ```
 - Abonnements : cycles, renouvellements, totaux par devise, export Excel/PDF, rappels locaux
-- Assistant et guide fiscaux : Maroc, France, Espagne, Portugal, États-Unis (informations générales, pas un conseil fiscal)
+- Assistant et guide fiscaux : Maroc et États-Unis (informations générales, pas un conseil fiscal)
 - Carte « À propos » dans les réglages : version, confidentialité, conditions, assistance
 - Meilleur contraste et cibles tactiles plus grandes
 - Message plus clair lorsqu'un export ne peut pas être écrit faute d'espace

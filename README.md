@@ -140,9 +140,11 @@ same database and the same transaction).
   Exported files are **not encrypted** — delete them when you are done; they are
   staged in the app cache like the other exports and cleared at the next start or
   unlock.
-- **Backups**: the backup format is now **3.0.0** and includes the subscriptions
-  store. Version 1.0.0 and 2.0.0 files still import: the migration adds an empty
-  subscription list and leaves every other record untouched. The same limits
+- **Backups**: the backup format is now **3.1.0** and includes the subscriptions
+  store and the per-document template snapshot. Version 1.0.0, 2.0.0 and 3.0.0
+  files still import: the migration adds an empty subscription list, writes the
+  legacy snapshot (classic layout, general preset, template version 1) on documents
+  that have none, and leaves every other record untouched. The same limits
   apply (25 MB, 20 000 records per store, 500 items per document, 10 000
   characters per field), and invalid subscription values are rejected before
   anything is written.
@@ -189,6 +191,80 @@ Appearance/language/time preferences are intentionally non-secret in Capacitor P
 - CSV exports on Customers, Invoices and Expenses include BOM/CRLF, CSV escaping and formula-injection protection. Their language picker overrides header/status language for that export. Values stay machine-portable; timestamps are ISO 8601 UTC, and each amount has its currency code.
 - PDF/share buttons create actual multi-page PDFs locally with bundled Inter/Tajawal fonts, including Arabic/French. The header uses the selected accent with contrast-aware text, or black and white. PDF pages are rendered images (not searchable text); no fonts are downloaded.
 
+## Document templates (offline, 2.1.0)
+
+Invoices and estimates can be laid out like the trade they belong to. The screens are
+**Settings → Templates** (defaults for new documents) and the *Layout / Topic preset*
+block inside the invoice and estimate forms (one document). Both open the same picker
+with a live preview drawn from sample data in the current language and direction.
+
+Four layouts and eight topic presets live as **plain data** in `src/lib/templates.ts` —
+`LAYOUTS` and `PRESETS` — and are read by one renderer (`src/lib/template-render.ts`).
+Adding a layout or a preset means adding one object, never a new component. Each entry
+carries the i18n keys of its name, description, neutral default note, payment-terms
+suggestion, footer wording and unit suggestions, so nothing here is hard-coded prose.
+
+- **classic** — colour band header with the logo on the leading side, hairline table,
+  boxed totals at the end of the flow, ruled footer.
+- **modern** — large title on a colour block, airy striped table, boxed totals, full
+  colour footer band, logo on the trailing side.
+- **minimal** — plain stacked header without a band, open table (no fills), totals as a
+  right-aligned stack, plain footer line, no logo.
+- **compact** — one inline header line, boxed compact table, totals on a single line,
+  no footer band and smaller type: the layout for a long parts list.
+
+- **general** — description, quantity, unit price: the default for any trade.
+- **freelancer & services** — adds a unit column, relabels quantity as *Hours* and
+  price as *Rate*, suggests hour/day/forfait, suggests payment within 30 days.
+- **construction & contractor** — adds a unit column (m², ml, forfait, day) and groups
+  the lines under *Materials* and *Labour* sub-headings.
+- **retail & shop** — relabels description as *Item* and adds an optional per-line
+  discount percentage.
+- **restaurant & café** — short *Item / Quantity / Price* lines for a busy service.
+- **consulting & training** — *Days or sessions* at a *Rate*, with day/session/hour
+  suggestions.
+- **transport & delivery** — *Trips* or kilometres at a *Rate*, suggestions trip/km/day.
+- **auto-entrepreneur** — prints *TVA non applicable*, keeps ICE, IF, TP and CNIE and
+  drops the tax lines entirely.
+
+**Mandatory content is locked.** Whatever the layout, the preset or the options a user
+picks, a Moroccan document always prints the seller name/address/ICE/IF/TP/RC, the
+client name/address and ICE, the sequential number, the date, every line description,
+quantity and unit price, the total excl. tax, the TVA rate and amount grouped by rate,
+the total incl. tax and the payment method. The four mandatory columns survive every
+preset, and an empty mandatory field prints a dash and is reported by the validator
+instead of disappearing. A preset can rename a column, add a column or add a
+sub-heading — it can never remove one, change a tax rate, or select a rate
+automatically; the strongest thing a preset says about tax is the one-line
+"check the correct rate for your activity" hint. In the US the tax stays its own line.
+
+Customisation is deliberately narrow: an accent colour from a palette that is checked
+for 4.5:1 contrast, an optional logo, an optional stamp/signature, and a footer note
+capped at 160 characters. Images are user-provided only (no bundled art, no remote
+URLs), downscaled to a 512 px edge, re-encoded as PNG or JPEG inside the size cap,
+stored in the encrypted vault like every other record, validated again on import
+(PNG/JPEG bitmap data URL inside the cap; SVG and oversized payloads are refused) and
+erased by *Reset app*. There is no free-form HTML, no custom font and no remote
+resource anywhere in the feature.
+
+**A document keeps the template it was saved with.** Each invoice and estimate stores
+its own snapshot — layout, preset, template version, accent, footer note, the labels it
+was created with and the tax region in force. Changing the defaults in Settings
+afterwards cannot reach back into an existing document, and a future template version
+can change how *new* documents look without touching version-1 documents. Documents
+written before templates existed resolve to classic + general at version 1 and render
+exactly as they did: no logo, the app accent, the same wording. The backup migration
+writes that snapshot down (backup **3.1.0**), so importing an older file keeps old
+invoices unchanged.
+
+The preview and the PDF are the same engine: the picker paints the laid-out pages on a
+canvas with the bundled Inter/Tajawal fonts, and the PDF wrapper paints the very same
+page objects. Multi-page tables repeat the table header row and the document number on
+every continuation page, long descriptions wrap instead of being clipped, and a 50-line
+invoice is laid out in a single pass (a test asserts a generous time budget on the
+layout step). The picker, the layout engine and the PDF wrapper are all lazily loaded,
+so nothing in this feature sits in the startup bundle.
+
 ## Dates and appearance
 
 Settings includes DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD or automatic dates; 12h/24h time; searchable Intl time zones (phone zone by default); first day of week; optional Hijri display for Arabic. Record timestamps stay UTC milliseconds internally; the backup serializer emits ISO UTC timestamps and the loader restores milliseconds. Date-only fields remain ISO calendar dates, avoiding timezone shifts.
@@ -208,9 +284,9 @@ Light/dark/system mode, ten accent presets/custom color, and comfortable/compact
 
 Android's file picker can put the app in the background. A selected File handle is retained by a DOM listener outside the unmounted data UI, **not decrypted while locked**. Unlock, then return to Settings if prompted to finish the import. Onboarding logo selection uses the same lifecycle-safe handoff. If Android kills the process, choose the file again.
 
-Backup **3.0.0** contains the nine stores (subscriptions included), all display/security policy preferences, document currency/language/rates/times/color settings and a non-secret biometric-enabled flag. No PIN verifier, encryption key or biometric credential is exported. The destination keeps its local PIN; biometric credentials cannot transfer and must be enrolled locally. Replace restores display preferences; Merge uses their `updatedAt`. Imported preferences are committed with records and safely applied from a pending marker after unlock.
+Backup **3.1.0** contains the nine stores (subscriptions included, plus the template snapshot and the optional logo/stamp of the business record), all display/security policy preferences, document currency/language/rates/times/color settings, the default template and a non-secret biometric-enabled flag. No PIN verifier, encryption key or biometric credential is exported. The destination keeps its local PIN; biometric credentials cannot transfer and must be enrolled locally. Replace restores display preferences; Merge uses their `updatedAt`. Imported preferences are committed with records and safely applied from a pending marker after unlock.
 
-Version **1.0.0** JSON and encrypted backups remain importable. Migration fills currency/language/time/preferences defaults, preserves IDs/timestamps and quantizes financial amounts. Existing display invoice numbers are not unique identity keys, so records from different phones with the same number can coexist. The UI remains single-business, not a multi-company account manager.
+Version **1.0.0**, **2.0.0** and **3.0.0** JSON and encrypted backups remain importable; a file written before templates existed upgrades every document to the legacy snapshot, which renders exactly like the pre-template PDF. Migration fills currency/language/time/preferences defaults, preserves IDs/timestamps and quantizes financial amounts. Existing display invoice numbers are not unique identity keys, so records from different phones with the same number can coexist. The UI remains single-business, not a multi-company account manager.
 
 An import uses one transaction spanning **all nine stores plus metadata**, stronger than separate per-store transactions. Encryption is prepared before opening that transaction to avoid IndexedDB auto-close during crypto awaits. A failure leaves the whole import unchanged.
 

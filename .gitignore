@@ -23,3 +23,6 @@ logs/
 *.jks
 *.keystore
 keystore.properties
+
+# Scratch scripts and local probes (not part of the app)
+.tmp/

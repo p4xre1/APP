@@ -1,3 +1,56 @@
+# Unreleased — document templates for invoices and estimates (2026-09-30)
+
+Layouts and topic presets for invoices and estimates, chosen per document and
+previewed live. Offline only: no INTERNET permission, no new permission, CSP
+unchanged. Still version 2.1.0; the backup format moves to **3.1.0**.
+
+- **Data-driven, no per-template code**: `src/lib/templates.ts` holds `LAYOUTS`
+  (classic, modern, minimal, compact: header, table, spacing, totals position, footer
+  and logo side) and `PRESETS` (general, freelancer & services, construction &
+  contractor, retail & shop, restaurant & café, consulting & training, transport &
+  delivery, auto-entrepreneur: visible columns, translated labels, unit suggestions,
+  default notes/terms/footer and an optional materials/labour grouping) as plain data.
+  One renderer (`src/lib/template-render.ts`) and one PDF wrapper read them, so a new
+  layout or preset is a new object, not a new component.
+- **Locked mandatory content**: every layout × preset × language × region combination
+  still prints seller name/address/ICE/IF/TP/RC, client name/address/ICE, sequential
+  number, date, each line's description, quantity and unit price, subtotal, TVA rate
+  and amount grouped by rate, total incl. tax and the payment method — the model
+  builder applies them, not the preset. An empty mandatory field prints a dash and is
+  reported by the validator instead of being dropped. The auto-entrepreneur preset
+  replaces the tax lines with *TVA non applicable* and prints ICE, IF, TP and CNIE. In
+  the US the tax stays its own line. A preset may rename or add a column, never remove
+  one, never change a rate and never auto-select one — the strongest hint is the
+  editable one-liner "check the correct rate for your activity".
+- **User controls**: a picker with a live preview on sample data in the current
+  language and direction (RTL included), layout and preset chosen separately with the
+  combination name shown; defaults for new documents in Settings; per-document override
+  in both forms; accent from a palette that is contrast-checked per colour, optional
+  logo and stamp/signature and a footer note capped at 160 characters. Images are
+  resized to a 512 px edge and re-encoded before they reach the vault (`src/lib/images.ts`),
+  validated again on import and cleared by *Reset app*.
+- **Snapshot per document**: layout, preset, template version, accent, footer note,
+  labels and tax region are stored on the document, so changing the defaults in
+  Settings never alters an existing invoice or estimate. Documents written before
+  templates existed map to classic + general at version 1 and render exactly as before;
+  backup **3.1.0** writes that snapshot down while 1.0.0–3.0.0 files keep importing.
+- **Tests** (14 new, 148 total): the full layout × preset × language × region matrix
+  (invoice and estimate) builds and lays out; every Moroccan combination carries all
+  locked mentions; the auto-entrepreneur preset shows the exemption and no tax line;
+  the US keeps tax on its own line; a stored snapshot is untouched by new Settings
+  defaults and is idempotent; a genuine 3.0.0 backup migrates to the legacy snapshot
+  and renders byte-identically to a document without one; discount maths; preset
+  structure (no key that could touch tax or mandatory content); RTL preview and painter;
+  image resize/cap/validation rules; contrast of every palette colour; i18n keys of
+  every registry string in all five dictionaries; a 50-line invoice (multi-page,
+  repeated header, wrapping, time budget); the picker stays lazy and every new control
+  keeps a 48 px target.
+- Bundle: the initial set stays at the same 14 assets and grows by **+19.4 KiB gzip**
+  (230.4 → 249.8 KiB), of which **+15.6 KiB** is the 148 new strings × 5 dictionaries
+  and +3.9 KiB the template/image validation in `backup-format`; the picker is a new
+  lazy chunk (7.2 KiB raw / 2.7 KiB gzip) and the layout engine ships inside the
+  existing lazy `invoice-pdf` chunk.
+
 # Unreleased — help centre, FAQ and in-app legal texts (2026-09-30)
 
 Offline help and legal area; still version 2.1.0, backup format unchanged.

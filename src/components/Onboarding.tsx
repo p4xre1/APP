@@ -5,6 +5,7 @@ import { t } from '../i18n'
 import LanguagePicker from './LanguagePicker'
 import CurrencyPicker from './CurrencyPicker'
 import { getPreferences, savePreferences } from '../lib/preferences'
+import { IMAGE_ERRORS, MAX_LOGO_BYTES, readImageFile } from '../lib/images'
 /**
  * Fatorati Offline - Onboarding
  * Welcome to Fatorati - Set up your business to get started
@@ -14,6 +15,8 @@ import { getPreferences, savePreferences } from '../lib/preferences'
 
 import { useEffect, useState } from 'react'
 import BackupPanel from './BackupPanel'
+import LegalOverlay from './LegalOverlay'
+import type { LegalKind } from '../lib/legal'
 import type { FormEvent } from 'react'
 import { Loader2, Building2, User, Phone, Mail, MapPin, Image as ImageIcon } from 'lucide-react'
 
@@ -41,6 +44,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   const [logo, setLogo] = useState<string | undefined>()
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [legal, setLegal] = useState<LegalKind | null>(null)
 
   const canSubmit = businessName.trim() && ownerName.trim() && !submitting
 
@@ -50,17 +54,15 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   }, [])
   function handleLogoFile(file: File) {
     const guard = sessionGuard()
-    
-    if (file.size > 2 * 1024 * 1024) {
-      setError(t("Logo must be less than 2MB"))
-      return
-    }
-
-    const reader = new FileReader()
-    reader.onload = () => {
-      try { guard(); setLogo(reader.result as string) } catch { /* Locked while reading. */ }
-    }
-    reader.readAsDataURL(file)
+    // Resized and re-encoded before it reaches the vault: a phone photo would
+    // otherwise be stored at full size and travel in every backup.
+    void readImageFile(file, MAX_LOGO_BYTES).then(dataUrl => {
+      guard()
+      setLogo(dataUrl)
+    }).catch((reason: unknown) => {
+      const message = reason instanceof Error && (Object.values(IMAGE_ERRORS) as string[]).includes(reason.message) ? reason.message : 'Operation failed'
+      setError(t(message))
+    })
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -176,7 +178,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder={t("owner@business.com")}
+                  placeholder={t("Example email")}
                   className="w-full px-3 py-2 text-[13.5px] border border-line-strong rounded-lg focus:ring-2 outline-none bg-surface text-ink transition-colors placeholder:text-faint focus:border-brand focus:ring-brand/15"
                 />
               </div>
@@ -218,7 +220,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                 )}
                 <button type="button" onClick={chooseLogoFile} className="px-3.5 py-2 rounded-lg text-[13px] font-semibold bg-brand-50 text-brand-700 hover:bg-brand-100 transition-all active:scale-[0.98] disabled:opacity-40 shadow-sm">{t('Choose logo')}</button>
               </div>
-              <p className="text-[12px] text-muted mt-1">{t("Max 2MB, PNG/JPG recommended")}</p>
+              <p className="text-[12px] text-muted mt-1">{t('Max 200 KB after resizing. PNG or JPG.')}</p>
             </div>
 
             <div className="pt-2">
@@ -235,12 +237,17 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                 )}
               </button>
               <p className="text-[12px] text-muted text-center mt-3">{t("No account required • Your data stays on device")}</p>
+              <div className="mt-1 flex flex-wrap items-center justify-center gap-x-4">
+                <button type="button" onClick={() => setLegal('privacy')} className="min-h-12 text-[12px] font-medium text-muted underline underline-offset-2 transition-colors hover:text-ink">{t('Privacy policy')}</button>
+                <button type="button" onClick={() => setLegal('terms')} className="min-h-12 text-[12px] font-medium text-muted underline underline-offset-2 transition-colors hover:text-ink">{t('Terms of use')}</button>
+              </div>
             </div>
           </form>
         </div>
 
         <p className="text-center text-muted text-[12px] mt-6">{t("Fatorati • Simple business management • Works offline")}</p>
       </div>
+      {legal && <LegalOverlay kind={legal} onClose={() => setLegal(null)} />}
     </div>
   )
 }

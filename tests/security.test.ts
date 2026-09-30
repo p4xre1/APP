@@ -4,7 +4,7 @@ import { IDBFactory, IDBObjectStore } from 'fake-indexeddb'
 import { createOrChangePin, unlockPin, lockVault, isUnlocked, lockDelay, readMeta } from '../src/lib/vault'
 import { readSnapshot, commit } from '../src/lib/storage'
 import { importBackup, exportBackup, getAll, downloadBackupFile } from '../src/lib/db'
-import { decodeBackup, encodeBackup, migrateBackup, STORES } from '../src/lib/backup-format'
+import { BACKUP_VERSION, decodeBackup, encodeBackup, migrateBackup, STORES } from '../src/lib/backup-format'
 import { fixture } from './fixtures'
 
 beforeEach(()=>{lockVault();globalThis.indexedDB=new IDBFactory()})
@@ -16,7 +16,7 @@ test('locked reads are blocked; whole records are encrypted with fresh IVs and n
   assert.ok(!text.includes('Café'));assert.ok(!text.includes('123456'));assert.ok(!text.includes('description'))
   assert.ok(raw.meta.salt&&raw.meta.verifier)
   const ivs=STORES.map(name=>(raw.stores[name][0] as {iv:string}).iv)
-  assert.equal(new Set(ivs).size,8)
+  assert.equal(new Set(ivs).size,STORES.length)
   lockVault();assert.equal(isUnlocked(),false);await assert.rejects(exportBackup(),/locked/)
   await unlockPin('123456');assert.equal((await exportBackup()).customers[0].name,'عميل André')
 })
@@ -62,7 +62,7 @@ test('old v1 backup migrates currency, language, preferences and UTC timestamps'
   old.version='1.0.0';delete old.preferences;delete old.security
   for(const name of ['businesses','invoices','estimates','expenses'])for(const row of old[name]){delete row.currency;delete row.language;delete row.occurredAt;delete row.pdfColor}
   const next=migrateBackup(old)
-  assert.equal(next.version,'2.0.0');assert.equal(next.preferences.defaultCurrency,'EUR')
+  assert.equal(next.version,BACKUP_VERSION);assert.equal(next.preferences.defaultCurrency,'EUR')
   assert.equal(next.invoices[0].currency,'EUR');assert.equal(next.expenses[0].occurredAt,100)
   assert.equal(next.security.biometricEnabled,false)
   await createOrChangePin('123456');await importBackup(next,'replace');assert.equal((await exportBackup()).invoices.length,1)
@@ -73,7 +73,7 @@ test('encrypted backup round-trip between independent installs with different PI
   const first=await exportBackup(),file=await encodeBackup(first,'transfer password')
   lockVault();globalThis.indexedDB=new IDBFactory();await createOrChangePin('654321')
   const incoming=await decodeBackup(file,'transfer password')
-  assert.deepEqual(await importBackup(incoming,'replace'),{added:8,updated:0,skipped:0})
+  assert.deepEqual(await importBackup(incoming,'replace'),{added:STORES.length,updated:0,skipped:0})
   const second=await exportBackup()
   for(const name of STORES)assert.deepEqual(second[name],first[name])
   lockVault();await assert.rejects(unlockPin('123456'),/Incorrect/);await unlockPin('654321')

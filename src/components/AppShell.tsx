@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { LayoutDashboard, Users, FolderOpen, FileText, ClipboardList, ReceiptText, Package, BarChart3, Settings, Search, PanelLeftClose, PanelLeftOpen, Menu, X, Plus, ChevronDown, ShieldCheck, LockKeyhole, Sun, Moon, type LucideIcon } from 'lucide-react'
+import { LayoutDashboard, Users, FolderOpen, FileText, ClipboardList, ReceiptText, Package, BarChart3, Settings, Repeat, Search, PanelLeftClose, PanelLeftOpen, Menu, X, Plus, ChevronDown, ShieldCheck, LockKeyhole, Sun, Moon, StickyNote, CalendarDays, type LucideIcon } from 'lucide-react'
 import { useI18n, usePreferences, errorText } from '../i18n'
 import { savePreferences } from '../lib/preferences'
 import { lockVault } from '../lib/vault'
@@ -8,15 +8,22 @@ import type { ModuleKey } from '../store/types'
 
 const navigation: {key:ModuleKey; label:string; group:string; icon:LucideIcon}[] = [
   {key:'dashboard',label:'Dashboard',group:'Overview',icon:LayoutDashboard},
+  {key:'notebook',label:'Notebook',group:'Workspace',icon:StickyNote},
+  {key:'calendar',label:'Calendar',group:'Workspace',icon:CalendarDays},
   {key:'customers',label:'Customers',group:'Business',icon:Users},
   {key:'projects',label:'Projects',group:'Business',icon:FolderOpen},
   {key:'invoices',label:'Invoices',group:'Finance',icon:FileText},
   {key:'estimates',label:'Estimates',group:'Finance',icon:ClipboardList},
   {key:'expenses',label:'Expenses',group:'Finance',icon:ReceiptText},
   {key:'products',label:'Products',group:'Business',icon:Package},
+  {key:'subscriptions',label:'Subscriptions',group:'Finance',icon:Repeat},
   {key:'reports',label:'Reports',group:'Finance',icon:BarChart3},
   {key:'settings',label:'Settings',group:'Workspace',icon:Settings},
 ]
+/** Screens that are opened from Settings and never appear in the sidebar. */
+const headings: Partial<Record<ModuleKey,string>> = {
+  taxGuide:'Tax guide', help:'Get help', faq:'FAQ', privacy:'Privacy policy', terms:'Terms of use', templates:'Templates',
+}
 export default function AppShell({active,onNavigate,businessName,children}:{active:ModuleKey;onNavigate:(key:ModuleKey)=>void;businessName:string;children:ReactNode}) {
   const {t}=useI18n(),prefs=usePreferences()
   const [collapsed,setCollapsed]=useState(false),[search,setSearch]=useState(''),[quick,setQuick]=useState(false),[profile,setProfile]=useState(false)
@@ -59,7 +66,7 @@ export default function AppShell({active,onNavigate,businessName,children}:{acti
     <dialog ref={drawer} aria-label={t('Navigation')} onClick={e=>{if(e.target===drawer.current)drawer.current.close()}} className="fixed inset-y-0 start-0 end-auto m-0 h-dvh max-h-none w-64 max-w-none border-0 bg-sidebar p-0 text-sidebar-ink backdrop:bg-navy/50 lg:hidden"><div className="dark-scroll flex h-full flex-col">{sidebar(true)}</div></dialog>
     <div className="flex min-w-0 flex-1 flex-col">
       <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-line bg-canvas/85 px-4 backdrop-blur-md sm:px-6 no-print">
-        <div className="flex min-w-0 items-center gap-3"><button aria-label={t('Open navigation')} onClick={()=>drawer.current?.showModal()} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted hover:bg-ink/5 lg:hidden"><Menu className="h-5 w-5"/></button><h1 className="truncate text-[16px] font-bold tracking-tight text-ink">{t(navigation.find(item=>item.key===active)!.label)}</h1></div>
+        <div className="flex min-w-0 items-center gap-3"><button aria-label={t('Open navigation')} onClick={()=>drawer.current?.showModal()} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted hover:bg-ink/5 lg:hidden"><Menu className="h-5 w-5"/></button><h1 className="truncate text-[16px] font-bold tracking-tight text-ink">{t(navigation.find(item=>item.key===active)?.label ?? headings[active] ?? 'Tax guide')}</h1></div>
         <div className="flex items-center gap-2.5">
           <button aria-label={t(dark?'theme.light':'theme.dark')} onClick={()=>void savePreferences({theme:dark?'light':'dark'}).catch(e=>showAlert(errorText(e)))} className="grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-ink/5">{dark?<Sun className="h-4 w-4"/>:<Moon className="h-4 w-4"/>}</button>
           <div ref={quickRef} className="relative" onKeyDown={e=>{if(e.key==='Escape')setQuick(false)}}><button aria-label={t('Quick actions')} aria-expanded={quick} onClick={()=>setQuick(!quick)} className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-[13px] font-semibold shadow-sm hover:bg-brand-700"><Plus className="h-4 w-4"/><span className="hidden sm:inline">{t('Quick actions')}</span><ChevronDown className="h-3.5 w-3.5"/></button>{quick&&<div className="absolute end-0 mt-2 w-56 overflow-hidden rounded-xl border border-line bg-surface shadow-xl">{(['projects','invoices','expenses'] as const).map(key=>{const item=navigation.find(item=>item.key===key)!;return <button key={key} onClick={()=>navigate(key)} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-start text-[13px] font-medium hover:bg-ink/5"><item.icon className="h-4 w-4 text-brand"/>{t(item.label)}</button>})}</div>}</div>

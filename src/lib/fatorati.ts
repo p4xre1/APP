@@ -5,33 +5,36 @@
  */
 
 export type Currency = string
-export { money, number as num, formatDate as fmtDate } from './format'
-import { formatDate } from './format'
-export const fmtDateTime = (value: number) => formatDate(value, true)
+export { money, formatDate as fmtDate } from './format'
 
-export function generateInvoiceNumber(prefix = 'INV'): string {
-  const date = new Date()
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0')
-  return `${prefix}-${year}${month}-${random}`
+/** Keep prefixes short, printable and portable: letters and digits only. */
+export function normalizePrefix(prefix: string, fallback: string) {
+  const clean = String(prefix || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8)
+  return clean || fallback
 }
 
-export function generateEstimateNumber(prefix = 'EST'): string {
-  const date = new Date()
+/**
+ * Sequential document number: `PREFIX-YYYY-0001`. The next number is derived from
+ * the numbers already stored, so replacing a backup keeps the existing sequence
+ * and two documents can never share a number in one app install.
+ */
+export function nextDocumentNumber(existing: string[], prefix: string, fallback: string, date = new Date()) {
+  const clean = normalizePrefix(prefix, fallback)
   const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0')
-  return `${prefix}-${year}${month}-${random}`
-}
-
-export function sanitize(input: string): string {
-  let out = ''
-  for (const ch of String(input).replace(/[<>]/g, '')) {
-    const code = ch.charCodeAt(0)
-    if (code >= 32 && code !== 127) out += ch
+  const pattern = new RegExp(`^${clean}-${year}-(\\d+)$`)
+  let highest = 0
+  for (const value of existing) {
+    const match = pattern.exec(typeof value === 'string' ? value : '')
+    if (match) highest = Math.max(highest, Number(match[1]))
   }
-  return out.trim().slice(0, 400)
+  const used = new Set(existing)
+  let sequence = highest + 1
+  let candidate = `${clean}-${year}-${String(sequence).padStart(4, '0')}`
+  while (used.has(candidate) && sequence < 1_000_000) {
+    sequence++
+    candidate = `${clean}-${year}-${String(sequence).padStart(4, '0')}`
+  }
+  return candidate
 }
 
 // Validation
@@ -45,7 +48,4 @@ export function validatePhone(phone: string): boolean {
 
 // App Info
 export const APP_NAME = 'Fatorati'
-export const APP_TAGLINE = 'Simple business management'
 export const APP_POSITIONING = '100% Local • Offline'
-export const APP_PROMISE = 'No subscription. Your customers, invoices and business records stay on your device. Works offline.'
-export const APP_FLOW = 'Create invoice → PDF → Share - easy for US customers'

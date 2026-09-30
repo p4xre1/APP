@@ -6,17 +6,16 @@ export function totalsByCurrency(rows: {currency?:string;amount:number}[]) {
   for(const row of rows){const currency=row.currency||getPreferences().defaultCurrency;groups.set(currency,[...(groups.get(currency)||[]),row.amount])}
   return [...groups].map(([currency,amounts])=>({currency,total:sumMoney(amounts,currency)}))
 }
-export function groupedMoney(rows:{currency?:string;amount:number}[]) {
-  const totals=totalsByCurrency(rows)
-  return totals.length?totals.map(row=>money(row.total,row.currency)).join(' · '):money(0)
-}
 export function reportTotals(invoices:Invoice[],expenses:Expense[],defaultCurrency=getPreferences().defaultCurrency) {
   const currencies=[...new Set([...invoices,...expenses].map(row=>row.currency||defaultCurrency))]
   const totals=currencies.map(currency=>{
     const revenue=sumMoney(invoices.filter(row=>row.status==='paid'&&(row.currency||defaultCurrency)===currency).map(row=>row.total),currency)
     const pending=sumMoney(invoices.filter(row=>row.status==='sent'&&(row.currency||defaultCurrency)===currency).map(row=>row.total),currency)
     const spent=sumMoney(expenses.filter(row=>(row.currency||defaultCurrency)===currency).map(row=>row.amount),currency)
-    return {currency,revenue,pending,expenses:spent,profit:sumMoney([revenue,-spent],currency)}
+    const tax=sumMoney(invoices.filter(row=>(row.currency||defaultCurrency)===currency).map(row=>row.tax||0),currency)
+    const counts={paid:0,sent:0,overdue:0,draft:0,total:invoices.length}
+    for(const row of invoices.filter(row=>(row.currency||defaultCurrency)===currency)) counts[row.status]=(counts[row.status]||0)+1
+    return {currency,revenue,pending,expenses:spent,tax,counts,profit:sumMoney([revenue,-spent],currency)}
   })
   let missing=0
   const converted:number[]=[]

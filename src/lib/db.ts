@@ -1,10 +1,11 @@
-import type { Business, Customer, Project, Invoice, Estimate, Expense, Product, Settings } from '../store/types'
-export type { Business, Customer, Project, Invoice, InvoiceItem, Estimate, Expense, Product, Settings } from '../store/types'
-import { BACKUP_VERSION, migrateBackup, normalizeRecord, encodeBackup, decodeBackup } from './backup-format'
+import type { Business, Customer, Project, Invoice, Estimate, Expense, Product, Settings, Subscription, Note } from '../store/types'
+export type { Business, Customer, Project, Invoice, InvoiceItem, Estimate, Expense, Product, Settings, Subscription, Note } from '../store/types'
+import { BACKUP_VERSION, MAX_BACKUP_BYTES, migrateBackup, normalizeRecord, encodeBackup, decodeBackup } from './backup-format'
 import type { ImportMode, ImportSummary } from './backup-format'
 import { STORES, type StoreName } from './schema'
-import { commit, exclusive, type PlainRecord, type Snapshot } from './storage'
-import { unlockedSnapshot, encryptRecord, sessionGuard, isUnlocked, readMeta } from './vault'
+import { normalizeNote } from './notes'
+import { commit, exclusive, type CipherRecord, type PlainRecord, type Snapshot } from './storage'
+import { unlockedSnapshot, encryptRecord, sessionGuard, isUnlocked, readMeta, cachedStore, cacheAfterCommit, dropCache } from './vault'
 import { shareFile } from './share-file'
 import { Preferences } from '@capacitor/preferences'
 import { getPreferences, savePreferences, type DisplayPreferences } from './preferences'
@@ -14,9 +15,10 @@ export interface FatoratiBackup {
   security: { appLock: true; biometricEnabled: boolean }
   businesses: Business[]; customers: Customer[]; projects: Project[]; invoices: Invoice[]
   estimates: Estimate[]; expenses: Expense[]; products: Product[]; settings: Settings[]
+  subscriptions: Subscription[]
+  notes: Note[]
 }
 export async function getAll<T>(name: StoreName): Promise<T[]> { return (await unlockedSnapshot()).stores[name] as unknown as T[] }
-export async function getById<T>(name: StoreName,id:string): Promise<T | undefined> { return (await getAll<PlainRecord>(name)).find(row=>row.id===id) as T | undefined }
 function normalize(name:StoreName, source:Record<string,unknown>) {
   const prefs=getPreferences(), row={...source}
   if(['businesses','invoices','estimates','expenses'].includes(name)) row.currency ||= prefs.defaultCurrency
@@ -24,32 +26,49 @@ function normalize(name:StoreName, source:Record<string,unknown>) {
     row.language ||= prefs.language; row.occurredAt ||= row.createdAt; row.pdfColor ??= prefs.pdfColor
   }
   if(row.exchangeRate !== undefined && (typeof row.exchangeRate !== 'number' || !Number.isFinite(row.exchangeRate) || row.exchangeRate <= 0)) throw new Error('Invalid amount')
+  // The notebook store is text only: no currency, no document fields to complete.
+  if(name === 'notes') return normalizeRecord(name,normalizeNote(row),prefs.defaultCurrency) as PlainRecord
   return normalizeRecord(name,row,prefs.defaultCurrency) as PlainRecord
+}
+/**
+ * Encrypts only the records that changed. Existing ciphertext is reused for the rest,
+ * so a one-record edit no longer re-encrypts the whole store.
+ */
+async function encryptChanged(name: StoreName, next: PlainRecord[], previous: PlainRecord[], previousRaw?: CipherRecord[]): Promise<CipherRecord[]> {
+  const rawById = new Map((previousRaw || []).map(row => [row.id, row]))
+  const before = new Map(previous.map(row => [row.id, JSON.stringify(row)]))
+  return Promise.all(next.map(row => {
+    const stored = rawById.get(row.id)
+    if (stored && before.get(row.id) === JSON.stringify(row)) return stored
+    return encryptRecord(name, row)
+  }))
 }
 export const add = <T extends {id:string;createdAt:number;updatedAt:number}>(name:StoreName,item:Omit<T,'id'|'createdAt'|'updatedAt'> & {id?:string}):Promise<T> => exclusive(async()=>{
   const guard=sessionGuard(), snapshot=await unlockedSnapshot(), now=Date.now()
   const row=normalize(name,{...item,id:item.id||generateId(),createdAt:now,updatedAt:now})
-  if(snapshot.stores[name].some(item=>item.id===row.id)) throw new Error('Duplicate record')
-  const records=await Promise.all([...snapshot.stores[name],row].map(item=>encryptRecord(name,item)))
+  if(snapshot.stores[name].some(entry=>entry.id===row.id)) throw new Error('Duplicate record')
+  const plain=[...snapshot.stores[name],row]
+  const records=await encryptChanged(name,plain,snapshot.stores[name],cachedStore(name)?.raw)
   await commit(snapshot.meta.revision,snapshot.meta,{[name]:records},guard)
+  cacheAfterCommit(snapshot.meta,snapshot.meta.revision+1,{[name]:{raw:records,plain}})
   return row as unknown as T
 })
 export const update = <T extends {id:string;updatedAt:number}>(name:StoreName,id:string,patch:Partial<Omit<T,'id'|'createdAt'>>):Promise<T> => exclusive(async()=>{
-  const guard=sessionGuard(),snapshot=await unlockedSnapshot(),existing=snapshot.stores[name].find(item=>item.id===id)
+  const guard=sessionGuard(),snapshot=await unlockedSnapshot(),existing=snapshot.stores[name].find(entry=>entry.id===id)
   if(!existing) throw new Error('Record not found')
   const row=normalize(name,{...existing,...patch,id,createdAt:existing.createdAt,updatedAt:Date.now()})
-  const records=await Promise.all(snapshot.stores[name].map(item=>encryptRecord(name,item.id===id?row:item)))
+  const plain=snapshot.stores[name].map(entry=>entry.id===id?row:entry)
+  const records=await encryptChanged(name,plain,snapshot.stores[name],cachedStore(name)?.raw)
   await commit(snapshot.meta.revision,snapshot.meta,{[name]:records},guard)
+  cacheAfterCommit(snapshot.meta,snapshot.meta.revision+1,{[name]:{raw:records,plain}})
   return row as unknown as T
 })
 export const remove = (name:StoreName,id:string) => exclusive(async()=>{
   const guard=sessionGuard(),snapshot=await unlockedSnapshot()
-  const records=await Promise.all(snapshot.stores[name].filter(item=>item.id!==id).map(item=>encryptRecord(name,item)))
+  const plain=snapshot.stores[name].filter(entry=>entry.id!==id)
+  const records=await encryptChanged(name,plain,snapshot.stores[name],cachedStore(name)?.raw)
   await commit(snapshot.meta.revision,snapshot.meta,{[name]:records},guard)
-})
-export const clear = (name:StoreName) => exclusive(async()=>{
-  const guard=sessionGuard(),snapshot=await unlockedSnapshot()
-  await commit(snapshot.meta.revision,snapshot.meta,{[name]:[]},guard)
+  cacheAfterCommit(snapshot.meta,snapshot.meta.revision+1,{[name]:{raw:records,plain}})
 })
 export const generateId = () => crypto.randomUUID()
 export async function exportBackup():Promise<FatoratiBackup> {
@@ -65,18 +84,19 @@ export const importBackup = (input:FatoratiBackup,mode:ImportMode):Promise<Impor
   const guard=sessionGuard(),snapshot=await unlockedSnapshot(),summary={added:0,updated:0,skipped:0}
   const encrypted={} as Snapshot['stores']
   for(const name of STORES) {
-    const records=new Map((mode==='merge'?snapshot.stores[name]:[]).map(item=>[item.id,item]))
+    const records=new Map((mode==='merge'?snapshot.stores[name]:[]).map(entry=>[entry.id,entry]))
     for(const incoming of backup[name]) {
       const existing=records.get(incoming.id)
       if(!existing){records.set(incoming.id,incoming as unknown as PlainRecord);summary.added++}
       else if(incoming.updatedAt>existing.updatedAt){records.set(incoming.id,incoming as unknown as PlainRecord);summary.updated++}
       else summary.skipped++
     }
-    encrypted[name]=await Promise.all([...records.values()].map(item=>encryptRecord(name,item)))
+    encrypted[name]=await Promise.all([...records.values()].map(entry=>encryptRecord(name,entry)))
   }
   const prefs=mode==='replace'||backup.preferences.updatedAt>getPreferences().updatedAt ? backup.preferences : getPreferences()
   // Persist display preferences in the same transaction; mirror to Capacitor on next unlock.
   await commit(snapshot.meta.revision,{...snapshot.meta,pendingPreferences:prefs},encrypted,guard)
+  dropCache() // Imported rows replace whole stores; a reload is the only honest cache update.
   return summary
 })
 export const applyImportedPreferences = () => exclusive(async () => {
@@ -85,6 +105,7 @@ export const applyImportedPreferences = () => exclusive(async () => {
     await savePreferences(meta.pendingPreferences)
     const next={...meta}; delete next.pendingPreferences
     await commit(meta.revision,next,undefined,guard)
+    cacheAfterCommit(next,meta.revision+1)
   }
 })
 export const LAST_BACKUP_KEY='fatorati.lastBackupAt'
@@ -100,6 +121,7 @@ export async function downloadBackupFile(backup:FatoratiBackup,password=''):Prom
   await Preferences.set({key:LAST_BACKUP_KEY,value:String(Date.now())})
   window.dispatchEvent(new Event('fatorati:backup'))
 }
-export async function loadBackupFile(file:File,password?:string) { return decodeBackup(await file.text(),password) }
-export async function isOnboardingCompleted(){return (await getAll<Business>('businesses')).length>0}
-export async function getBusiness(){return (await getAll<Business>('businesses'))[0]||null}
+export async function loadBackupFile(file:File,password?:string) {
+  if(file.size > MAX_BACKUP_BYTES) throw new Error('Backup file is too large')
+  return decodeBackup(await file.text(),password)
+}

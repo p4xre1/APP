@@ -11,7 +11,8 @@ export function chartData(invoices:Invoice[], expenses:Expense[], currency:strin
   const labels=dates.map(date=>new Intl.DateTimeFormat(locale,{timeZone:'UTC',calendar:'gregory',month:'short',year:'2-digit'}).format(date))
   const paid=invoices.filter(row=>row.status==='paid'&&(row.currency||defaultCurrency)===currency)
   const spent=expenses.filter(row=>(row.currency||defaultCurrency)===currency)
-  const revenue=keys.map(month=>sumMoney(paid.filter(row=>key(row.occurredAt??row.createdAt)===month).map(row=>row.total),currency))
+  // A paid invoice lands in the month it was actually paid; unpaid ones keep their record date.
+  const revenue=keys.map(month=>sumMoney(paid.filter(row=>key(row.paidAt??row.occurredAt??row.createdAt)===month).map(row=>row.total),currency))
   const expense=keys.map(month=>sumMoney(spent.filter(row=>key(row.occurredAt??row.createdAt)===month).map(row=>row.amount),currency))
   const grouped=new Map<string,number[]>()
   for(const row of spent)if(row.amount>0&&keys.includes(key(row.occurredAt??row.createdAt)))grouped.set(row.category,[...(grouped.get(row.category)||[]),row.amount])

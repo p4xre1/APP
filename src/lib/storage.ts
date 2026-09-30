@@ -4,6 +4,8 @@ export interface CipherRecord { id: string; encrypted: 1; iv: string; ciphertext
 export interface PlainRecord { id: string; createdAt: number; updatedAt: number; [field: string]: unknown }
 export interface VaultMeta {
   id: 'security'; revision: number; salt?: string; verifier?: string; keyId?: string
+  /** PBKDF2 cost the verifier was derived with. Absent on older installs. */
+  iterations?: number
   failures: number; blockedUntil: number; biometric: boolean
   pendingPreferences?: DisplayPreferences
 }
@@ -12,7 +14,13 @@ export const emptyMeta = (): VaultMeta => ({ id:'security', revision:0, failures
 export async function openStorage(): Promise<IDBDatabase> {
   return new Promise((resolve,reject) => {
     let blocked = false
-    const request = indexedDB.open('fatorati-offline-v1', 3)
+    /**
+     * v4 added the subscriptions store; v5 records the document template snapshot and
+     * v6 adds the notes store of the notebook (plain encrypted rows, so no index
+     * changes). onupgradeneeded only ever creates what is missing, which is what keeps
+     * an old install opening: the new store starts empty and nothing else is touched.
+     */
+    const request = indexedDB.open('fatorati-offline-v1', 6)
     request.onerror = () => reject(new Error('Storage unavailable'))
     request.onblocked = () => { blocked = true; reject(new Error('Close other app windows')) }
     request.onupgradeneeded = () => {

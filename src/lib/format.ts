@@ -68,3 +68,38 @@ export function weekDays() {
   const start = getPreferences().firstDay
   return Array.from({length:7}, (_,i) => new Intl.DateTimeFormat(locale(), { weekday:'short', timeZone:'UTC' }).format(Date.UTC(2026,0,4+(start+i)%7)))
 }
+
+/**
+ * One document line, quantized to the currency's minor unit. An optional line
+ * discount (percent, 0-100) is taken off the rounded gross amount, so the stored
+ * `total` is always the discounted, rounded figure the document prints.
+ */
+export function lineTotal(quantity: number, unitPrice: number, currency: string, discountPercent = 0) {
+  if (!Number.isFinite(quantity) || !Number.isFinite(unitPrice)) throw new Error('Invalid amount')
+  const gross = roundMoney(roundMoney(unitPrice, currency) * quantity, currency)
+  const discount = Number(discountPercent)
+  if (!Number.isFinite(discount) || discount <= 0) return gross
+  if (discount > 100) throw new Error('Invalid discount')
+  return roundMoney(gross * (1 - discount / 100), currency)
+}
+/**
+ * Tax on a net amount, in the currency's minor units, half away from zero.
+ * Rate is a percentage (e.g. 20 for 20%); negative or unset rates yield no tax.
+ */
+export function taxAmount(net: number, ratePercent: number | undefined, currency: string): number {
+  const rate = Number(ratePercent)
+  if (!Number.isFinite(rate) || rate <= 0) return 0
+  if (rate > 1000) throw new Error('Invalid tax rate')
+  const scaled = BigInt(minorUnits(net, currency)) * BigInt(Math.round(rate * 1_000_000))
+  const divisor = 100n * 1_000_000n // rate percent (x1e6) over 100
+  const negative = scaled < 0n, absolute = negative ? -scaled : scaled
+  const units = Number((absolute * 2n + divisor) / (2n * divisor))
+  if (!Number.isSafeInteger(units)) throw new Error('Amount too large')
+  return (negative ? -units : units) / 10 ** decimals(currency)
+}
+/** Subtotal, tax and total for a set of lines, all in integer minor-unit arithmetic. */
+export function documentTotals(lines: { quantity: number; unitPrice: number; discount?: number }[], ratePercent: number | undefined, currency: string) {
+  const subtotal = sumMoney(lines.map(line => lineTotal(line.quantity, line.unitPrice, currency, line.discount)), currency)
+  const tax = taxAmount(subtotal, ratePercent, currency)
+  return { subtotal, tax, total: sumMoney([subtotal, tax], currency) }
+}

@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react'
 import { Download, Upload } from 'lucide-react'
 import { useFatorati } from '../store/useFatorati'
 import { loadBackupFile } from '../lib/db'
-import { PasswordRequiredError } from '../lib/backup-format'
+import { PasswordRequiredError, MIN_PASSWORD_LENGTH } from '../lib/backup-format'
 import type { ImportMode } from '../lib/backup-format'
 import { useLastBackup } from '../lib/useLastBackup'
 
@@ -36,6 +36,7 @@ export default function BackupPanel() {
 
   async function handleExport() {
     if (!password) { setMessage(t("A backup password is required while app lock is enabled")); return }
+    if (password.length < MIN_PASSWORD_LENGTH) { setMessage(t("Backup password is too short")); return }
     if (password !== confirmation) { setMessage(t("Export passwords do not match.")); return }
     setBusy(true); setMessage('')
     try {
@@ -70,7 +71,7 @@ export default function BackupPanel() {
   }
 
   return (
-    <div className="bg-surface rounded-xl border border-line p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+    <div id="backup-panel" className="bg-surface rounded-xl border border-line p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
       <h2 className="text-[14px] font-bold text-ink mb-4 flex items-center gap-2"><Download className="w-5 h-5" />{t("Backup & Restore")}</h2>
       <p className="text-[13px] text-muted mb-3">{t("Your data lives only on this phone. Uninstalling the app deletes it. Export a backup regularly.")}</p>
       <p className="text-[12px] text-muted mb-4">{t("Last backup date:")}{!loaded ? t("Loading...") : error ? t("Unavailable") : lastBackup ? formatDate(lastBackup,true) : t("Never")}</p>

@@ -1,6 +1,8 @@
 import type { FatoratiBackup } from './db'
 
-export const BACKUP_VERSION = '2.0.0'
+export const BACKUP_VERSION = '3.0.0'
+/** Formats this build can still read. Everything older is migrated up on import. */
+export const SUPPORTED_BACKUP_VERSIONS = ['1.0.0', '2.0.0', BACKUP_VERSION]
 /** Import limits. They bound work before any decrypt or write happens. */
 export const MAX_BACKUP_BYTES = 25 * 1024 * 1024
 export const MAX_RECORDS_PER_STORE = 20_000
@@ -15,6 +17,7 @@ export type { StoreName } from './schema'
 import { defaultPreferences, validPreferences, validCurrency, languages } from './preferences'
 import { roundMoney } from './format'
 import { isTaxRegion } from './taxGuide'
+import { isSubscriptionCurrency, isSubscriptionCycle, isISODate, MAX_PERIOD_MONTHS, warnDays } from './subscriptions'
 export type ImportMode = 'replace' | 'merge'
 export interface ImportSummary { added: number; updated: number; skipped: number }
 
@@ -32,17 +35,20 @@ const strings: Record<StoreName, string[]> = {
   expenses: ['description', 'category', 'date', 'vendor'],
   products: ['name', 'description', 'sku', 'unit'],
   settings: ['businessId', 'invoicePrefix', 'estimatePrefix'],
+  subscriptions: ['serviceName', 'currency', 'billingCycle', 'startDate'],
 }
 const numbers: Record<StoreName, string[]> = {
   businesses: [], customers: ['balance'], projects: ['budget'],
   invoices: ['subtotal', 'tax', 'total'], estimates: ['subtotal', 'tax', 'total'],
   expenses: ['amount'], products: ['unitPrice', 'stock'], settings: ['taxRate'],
+  subscriptions: ['amountMinor'],
 }
 const enums: Partial<Record<StoreName, Record<string, string[]>>> = {
   projects: { status: ['planning', 'active', 'on_hold', 'done'] },
   invoices: { status: ['draft', 'sent', 'paid', 'overdue'] },
   estimates: { status: ['draft', 'sent', 'accepted', 'declined'] },
   settings: { theme: ['light', 'dark', 'system'], language: [...languages] },
+  subscriptions: { currency: ['MAD', 'USD', 'EUR'], billingCycle: ['monthly', 'yearly', 'one_time_period'] },
 }
 
 /** Validate everything before opening a write transaction. Legacy unencrypted v1 files remain valid. */
@@ -71,8 +77,20 @@ export function validateBackup(value: unknown): asserts value is FatoratiBackup 
       if (name === 'settings') {
         if (record.taxRegion !== undefined && !isTaxRegion(record.taxRegion)) throw invalid()
         if (record.taxAssistantRegion !== undefined && !isTaxRegion(record.taxAssistantRegion)) throw invalid()
-        for (const key of ['taxAssistantVisible', 'taxAssistantSeen']) {
+        for (const key of ['taxAssistantVisible', 'taxAssistantSeen', 'subscriptionReminders', 'subscriptionDayOfReminder', 'subscriptionHideNames']) {
           if (record[key] !== undefined && typeof record[key] !== 'boolean') throw invalid()
+        }
+        if (record.subscriptionWarnDays !== undefined && warnDays(record.subscriptionWarnDays) !== record.subscriptionWarnDays) throw invalid()
+      }
+      if (name === 'subscriptions') {
+        if (!isSubscriptionCurrency(record.currency) || !isSubscriptionCycle(record.billingCycle)) throw invalid()
+        if (!isISODate(record.startDate)) throw invalid()
+        if (!Number.isInteger(record.amountMinor) || (record.amountMinor as number) < 0 || (record.amountMinor as number) > 1e15) throw invalid()
+        if (typeof record.autoRenew !== 'boolean') throw invalid()
+        if (record.periodMonths !== undefined && (!Number.isInteger(record.periodMonths) || (record.periodMonths as number) < 1 || (record.periodMonths as number) > MAX_PERIOD_MONTHS)) throw invalid()
+        if (record.cancelledAt !== undefined && !timestamp(record.cancelledAt)) throw invalid()
+        for (const key of ['category', 'paymentMethod', 'notes']) {
+          if (record[key] !== undefined && typeof record[key] !== 'string') throw invalid()
         }
       }
       for (const [key, choices] of Object.entries(enums[name] || {})) {
@@ -185,12 +203,13 @@ export async function decodeBackup(text: string, password?: string): Promise<Fat
 
 /** v1 -> v2; ISO timestamps in portable files -> UTC milliseconds in memory. */
 export function migrateBackup(input: unknown): FatoratiBackup {
-  if (!object(input) || !['1.0.0', BACKUP_VERSION].includes(input.version as string)) throw new Error('Unsupported backup version')
+  if (!object(input) || !SUPPORTED_BACKUP_VERSIONS.includes(input.version as string)) throw new Error('Unsupported backup version')
   const value = JSON.parse(JSON.stringify(input), (key, item) => {
     if (['createdAt','updatedAt','occurredAt','exportedAt','paidAt'].includes(key) && typeof item === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(item)) return Date.parse(item)
     return item
   }) as Record<string, unknown>
   if(value.version === '1.0.0') {
+    for (const name of STORES) if (value[name] === undefined) value[name] = []
     const settings = Array.isArray(value.settings) ? value.settings[0] : undefined
     const currency = settings?.currency || 'USD'
     if(!validCurrency(currency)) throw new Error('Invalid backup structure')
@@ -208,6 +227,11 @@ export function migrateBackup(input: unknown): FatoratiBackup {
         if(name === 'invoices' || name === 'estimates') row.taxRate ??= 0
       }
     }
+    value.version = '2.0.0'
+  }
+  // 2.0.0 -> 3.0.0: the subscriptions store is new, so older files simply have none.
+  if (value.version !== BACKUP_VERSION) {
+    if (value.subscriptions === undefined) (value as Record<string, unknown>).subscriptions = []
     value.version = BACKUP_VERSION
   }
   validateBackup(value)

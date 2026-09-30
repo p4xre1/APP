@@ -1,5 +1,5 @@
-import type { Business, Customer, Project, Invoice, Estimate, Expense, Product, Settings } from '../store/types'
-export type { Business, Customer, Project, Invoice, InvoiceItem, Estimate, Expense, Product, Settings } from '../store/types'
+import type { Business, Customer, Project, Invoice, Estimate, Expense, Product, Settings, Subscription } from '../store/types'
+export type { Business, Customer, Project, Invoice, InvoiceItem, Estimate, Expense, Product, Settings, Subscription } from '../store/types'
 import { BACKUP_VERSION, MAX_BACKUP_BYTES, migrateBackup, normalizeRecord, encodeBackup, decodeBackup } from './backup-format'
 import type { ImportMode, ImportSummary } from './backup-format'
 import { STORES, type StoreName } from './schema'
@@ -14,6 +14,7 @@ export interface FatoratiBackup {
   security: { appLock: true; biometricEnabled: boolean }
   businesses: Business[]; customers: Customer[]; projects: Project[]; invoices: Invoice[]
   estimates: Estimate[]; expenses: Expense[]; products: Product[]; settings: Settings[]
+  subscriptions: Subscription[]
 }
 export async function getAll<T>(name: StoreName): Promise<T[]> { return (await unlockedSnapshot()).stores[name] as unknown as T[] }
 function normalize(name:StoreName, source:Record<string,unknown>) {

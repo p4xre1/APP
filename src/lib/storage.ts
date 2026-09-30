@@ -14,7 +14,8 @@ export const emptyMeta = (): VaultMeta => ({ id:'security', revision:0, failures
 export async function openStorage(): Promise<IDBDatabase> {
   return new Promise((resolve,reject) => {
     let blocked = false
-    const request = indexedDB.open('fatorati-offline-v1', 3)
+    /** v4 adds the subscriptions store; onupgradeneeded only creates what is missing. */
+    const request = indexedDB.open('fatorati-offline-v1', 4)
     request.onerror = () => reject(new Error('Storage unavailable'))
     request.onblocked = () => { blocked = true; reject(new Error('Close other app windows')) }
     request.onupgradeneeded = () => {

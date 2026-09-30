@@ -20,7 +20,7 @@ export default function SecurityGate({ children }: {children:ReactNode}) {
   const refresh=async()=>{const meta=await readMeta();setConfigured(!!meta.salt);setBiometric(meta.biometric);setBlocked(meta.blockedUntil)}
   useEffect(()=>{void refresh().catch(e=>setError(errorText(e)))},[unlocked])
   useEffect(()=>{
-    const clear=()=>{setPin('');setRepeat('');setReady(false);useFatorati.setState({business:null,customers:[],projects:[],invoices:[],estimates:[],expenses:[],products:[],settings:null,isLoading:true,isOnboarded:false,loadError:null})}
+    const clear=()=>{setPin('');setRepeat('');setReady(false);useFatorati.setState({business:null,customers:[],projects:[],invoices:[],estimates:[],expenses:[],products:[],subscriptions:[],settings:null,isLoading:true,isOnboarded:false,loadError:null})}
     return subscribeLock(()=>{if(!isUnlocked())clear()})
   },[])
   useEffect(()=>{

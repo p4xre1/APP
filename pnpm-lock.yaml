@@ -29,6 +29,9 @@ importers:
       '@capacitor/keyboard':
         specifier: ^8.0.5
         version: 8.0.5(@capacitor/core@8.5.2)
+      '@capacitor/local-notifications':
+        specifier: ^8.3.1
+        version: 8.3.1(@capacitor/core@8.5.2)
       '@capacitor/preferences':
         specifier: ^8.0.1
         version: 8.0.1(@capacitor/core@8.5.2)
@@ -56,6 +59,9 @@ importers:
       react-dom:
         specifier: ^19.2.4
         version: 19.3.0(react@19.3.0)
+      write-excel-file:
+        specifier: ^4.1.1
+        version: 4.1.1
       zustand:
         specifier: ^5.0.15
         version: 5.0.15(@types/react@19.3.0)(react@19.3.0)
@@ -133,6 +139,11 @@ packages:
 
   '@capacitor/keyboard@8.0.5':
     resolution: {integrity: sha512-oFXygC4eKYA5l2MdpTR06L2M/4x6e2SLD5yS1T9+UBDKTkzyvhWKEhbYLUaTIBPpLKqlfGudJw1X73S1H9eUzQ==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
+
+  '@capacitor/local-notifications@8.3.1':
+    resolution: {integrity: sha512-F7zu/+p/mIR958YP4axOkeI5hBKRaXDyYjbNPrAil2wWfd7OxScPSTvP9t85NpQ0eULVRu0/sntoxOg6ck477A==}
     peerDependencies:
       '@capacitor/core': '>=8.0.0'
 
@@ -1308,6 +1319,10 @@ packages:
     resolution: {integrity: sha512-YVGIj2kamLSTxw6NsZjoBxfSwsn0ycdesmc4p+Q21c5zPuZ1pl+NfxVdxPtdHvmNVOQ6XSYG4AUtyt/Fi7D16Q==}
     engines: {node: '>=10'}
 
+  write-excel-file@4.1.1:
+    resolution: {integrity: sha512-MUnCnNtQrcZek832ZcU24uU0rSphFmKPD1DvIjXOlygVb93CV7Tme6H3jUTkxsMmjB2W7HIzERzjqTi5kui71A==}
+    engines: {node: '>=18'}
+
   xcode@3.0.1:
     resolution: {integrity: sha512-kCz5k7J7XbJtjABOvkc5lJmkiDh8VhjVCGNiqdKCscmVpdVUpEAyXv1xmCLkQJ5dsHqx3IPO4XW+NTDhU/fatA==}
     engines: {node: '>=10.0.0'}
@@ -1398,6 +1413,10 @@ snapshots:
       '@capacitor/core': 8.5.2
 
   '@capacitor/keyboard@8.0.5(@capacitor/core@8.5.2)':
+    dependencies:
+      '@capacitor/core': 8.5.2
+
+  '@capacitor/local-notifications@8.3.1(@capacitor/core@8.5.2)':
     dependencies:
       '@capacitor/core': 8.5.2
 
@@ -2376,6 +2395,10 @@ snapshots:
       ansi-styles: 4.3.0
       string-width: 4.2.3
       strip-ansi: 6.0.1
+
+  write-excel-file@4.1.1:
+    dependencies:
+      fflate: 0.8.3
 
   xcode@3.0.1:
     dependencies:

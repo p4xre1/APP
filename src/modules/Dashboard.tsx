@@ -10,6 +10,7 @@ import { useLastBackup } from '../lib/useLastBackup'
 import { hasPickedBackup } from '../lib/backup-picker'
 import { Card, SectionTitle, Btn } from '../components/kit'
 import { AreaChart, BarChart, Donut, Legend } from '../components/charts'
+import { SubscriptionAttentionBanner } from './Subscriptions'
 
 export default function Dashboard({onNavigate}:{onNavigate:(key:ModuleKey)=>void}) {
   const {t}=useI18n(),prefs=usePreferences(),{invoices,expenses,customers,products,business}=useFatorati(),{overdue}=useLastBackup()
@@ -33,6 +34,7 @@ export default function Dashboard({onNavigate}:{onNavigate:(key:ModuleKey)=>void
       <select aria-label={t('Chart range')} value={range} onChange={e=>setRange(Number(e.target.value))} className="rounded-lg border border-line-strong bg-surface px-3 py-2 text-[12.5px] font-semibold text-ink outline-none focus:border-brand">{[6,8,12].map(count=><option key={count} value={count}>{t('Last months',{count})}</option>)}</select>
     </div>}/>
     {hasPickedBackup()&&<Card className="border-brand/20 bg-brand-50 p-4 text-[13px]"><button onClick={()=>onNavigate('settings')} className="text-start">{t('Backup selected; open Settings to finish importing')}</button></Card>}
+    <SubscriptionAttentionBanner compact onOpen={()=>onNavigate('subscriptions')}/>
     {overdue&&<Card className="border-warn/20 bg-warn-50 p-4 text-[13px] text-warn"><button onClick={()=>onNavigate('settings')} className="text-start">{t('Backup reminder: no backup in the last 7 days. Open Settings → Backup & Restore to protect your data.')}</button></Card>}
     <div className="grid gap-3 sm:grid-cols-3">{quick.map(action=><button key={action.key} onClick={()=>onNavigate(action.key)} className="group flex items-center gap-3 rounded-xl border border-line bg-surface p-4 text-start shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all hover:-translate-y-0.5 hover:shadow-md"><span className={`grid h-10 w-10 place-items-center rounded-lg ${action.tint}`}><action.icon className="h-5 w-5"/></span><span className="text-[13.5px] font-semibold">{t(action.label)}</span></button>)}</div>
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{metrics.map(metric=><Card key={metric.label} className="p-5"><div className="flex items-start justify-between"><span className={`grid h-9 w-9 place-items-center rounded-lg ${metric.tint}`}><metric.icon className="h-4.5 w-4.5" strokeWidth={2.2}/></span><span className="text-[11.5px] font-semibold text-muted">{currency}</span></div><p className="mt-4 text-[12px] font-medium text-muted">{t(metric.label)}</p><p className="tnum mt-1 text-[22px] font-bold leading-none tracking-tight break-words">{money(metric.value,currency)}</p><p className="mt-1.5 text-[11.5px] text-muted">{metric.hint}</p></Card>)}</div>

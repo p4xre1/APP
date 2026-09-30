@@ -14,9 +14,40 @@ export type ModuleKey =
   | 'expenses'
   | 'products'
   | 'reports'
+  | 'subscriptions'
   | 'settings'
   /** Full-screen tax guide; opened from Settings, not part of the sidebar. */
   | 'taxGuide'
+
+/** Billing cadence of a tracked subscription. */
+export type SubscriptionCycle = 'monthly' | 'yearly' | 'one_time_period'
+
+/** Currency a subscription may be billed in. Amounts are stored in minor units. */
+export type SubscriptionCurrency = 'MAD' | 'USD' | 'EUR'
+
+/**
+ * A recurring payment the user tracks. Money is stored as an integer number of
+ * minor units (centimes/cents) so sums never drift, like the rest of the vault.
+ */
+export interface Subscription {
+  id: string
+  serviceName: string
+  category?: string
+  amountMinor: number
+  currency: SubscriptionCurrency
+  billingCycle: SubscriptionCycle
+  /** Months covered by one payment when billingCycle is 'one_time_period'. */
+  periodMonths?: number
+  autoRenew: boolean
+  /** ISO calendar date, YYYY-MM-DD, in the device's local calendar. */
+  startDate: string
+  paymentMethod?: string
+  notes?: string
+  /** UTC milliseconds when the user cancelled it. */
+  cancelledAt?: number
+  createdAt: number
+  updatedAt: number
+}
 
 /** Country whose invoice and tax guidance the assistant shows. */
 export type TaxRegion = 'MA' | 'US'
@@ -166,6 +197,14 @@ export interface Settings {
   taxAssistantRegion?: TaxRegion
   /** Set after the assistant has been shown once, so it then starts collapsed. */
   taxAssistantSeen?: boolean
+  /** Subscription reminders: opt-in, so absent means off. */
+  subscriptionReminders?: boolean
+  /** How many days before a renewal to remind. Clamped to 1-30 by the UI. */
+  subscriptionWarnDays?: number
+  /** Also remind on the renewal/end day itself. */
+  subscriptionDayOfReminder?: boolean
+  /** Hide service names from notification text (default ON). */
+  subscriptionHideNames?: boolean
   createdAt: number
   updatedAt: number
 }

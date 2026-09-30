@@ -4,6 +4,7 @@ import { t, usePreferences } from '../i18n'
 import { savePreferences, supportedValues } from '../lib/preferences'
 import PreferencesPanel from '../components/PreferencesPanel'
 import SecurityPanel from '../components/SecurityPanel'
+import SubscriptionRemindersPanel from '../components/SubscriptionRemindersPanel'
 /**
  * Fatorati Offline - Settings
  * 100% Local • Offline - Export/Import Backup, Business Settings
@@ -238,6 +239,9 @@ export default function Settings({ onNavigate }: { onNavigate?: (key: ModuleKey)
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
         <PreferencesPanel />
         <SecurityPanel />
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+        <SubscriptionRemindersPanel />
       </div>
     </div>
   )

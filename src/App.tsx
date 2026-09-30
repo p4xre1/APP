@@ -25,6 +25,7 @@ const Expenses = lazy(() => import('./modules/Expenses'))
 const Products = lazy(() => import('./modules/Products'))
 const Settings = lazy(() => import('./modules/Settings'))
 const Reports = lazy(() => import('./modules/Reports'))
+const Subscriptions = lazy(() => import('./modules/Subscriptions'))
 const TaxGuide = lazy(() => import('./modules/TaxGuide'))
 
 function Fallback() {
@@ -65,12 +66,24 @@ function LoadFailure({ message, onRetry }: { message: string; onRetry: () => voi
 
 export default function App() {
   useI18n()
-  const { business, isOnboarded, isLoading, loadError, init, completeOnboarding } = useFatorati()
+  const { business, isOnboarded, isLoading, loadError, init, completeOnboarding, subscriptions, settings, resyncReminders } = useFatorati()
   const [active, setActive] = useState<ModuleKey>('dashboard')
 
   useEffect(() => {
     void init()
   }, [init])
+
+  // Reminders are rebuilt on launch and whenever a subscription or a reminder
+  // setting changes, so deleted and cancelled entries never keep firing.
+  const reminderKey = JSON.stringify([
+    subscriptions.map(row => [row.id, row.updatedAt, row.cancelledAt ?? null, row.startDate, row.billingCycle, row.autoRenew, row.periodMonths ?? null]),
+    settings?.subscriptionReminders ?? false, settings?.subscriptionWarnDays ?? null,
+    settings?.subscriptionDayOfReminder ?? false, settings?.subscriptionHideNames ?? true,
+  ])
+  useEffect(() => {
+    if (!isOnboarded) return
+    void resyncReminders()
+  }, [reminderKey, isOnboarded, resyncReminders])
 
   if (isLoading) {
     return <Fallback />
@@ -103,6 +116,8 @@ export default function App() {
         return <Products />
       case 'reports':
         return <Reports />
+      case 'subscriptions':
+        return <Subscriptions />
       case 'settings':
         return <Settings onNavigate={setActive} />
       case 'taxGuide':

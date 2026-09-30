@@ -216,6 +216,47 @@ An import uses one transaction spanning **all nine stores plus metadata**, stron
 
 The last-backup Preferences date records successful share handoff, not proof of delivery. Failed/canceled shares reported by Capacitor do not reset it; CSV/PDF/imports do not either. The dashboard reminds after seven days or when no backup has been recorded. Native exports use unique Cache folders and FileProvider; only non-native test/browser execution uses `<a download>`.
 
+## Help & legal (offline, 2.1.0)
+
+Everything a user needs in order to understand the app ships inside it:
+**Settings → Help & legal** opens four full-screen pages.
+
+- **Get help** — short intro, a link to the FAQ, a troubleshooting checklist
+  (notifications, exports, the lock, backup imports), the support rows and a
+  self-service block that jumps to Backup & Restore and shows the notification
+  permission status.
+- **FAQ** — six topics (Data & security, Backup, Invoices, Tax guide,
+  Subscriptions, General) with a search box that works in Arabic, English, French,
+  Spanish and Portuguese (case-, accent- and diacritic-insensitive). The content is
+  data in `src/lib/faq.ts` held as i18n keys, so every answer is translated in the
+  five dictionaries, and every answer was checked against this repository. Answers
+  that depend on Android rather than on this code are listed as such in the file
+  header.
+- **Privacy policy** and **Terms of use** — the full text, rendered from
+  `docs/legal/{privacy,terms}.{en,fr,ar}.md`. `scripts/legal-content.mjs` copies
+  those files into `src/lib/legal-content.generated.ts`; `pnpm build` runs the
+  generator and `tests/help-legal.test.ts` fails if the committed module and the
+  markdown differ by one byte, so the app can never carry a second, drifting copy.
+  Spanish and Portuguese read the English document with a translated notice
+  because `docs/legal` ships English, French and Arabic only.
+
+The same two documents are reachable before the app starts: the onboarding form and
+the PIN screen carry small **Privacy policy** / **Terms of use** links that open the
+text in a modal dialog. Both pages show a "last updated" line and the app version,
+render headings, lists and tables as real elements (no raw HTML, and relative repo
+links stay plain text) and add an **Open online version** row only when
+`PRIVACY_POLICY_URL` / `TERMS_URL` are configured.
+
+**A problem report never carries business data.** *Report a problem* opens the
+device email app with a pre-filled message that contains exactly four values — app
+version, Android version, device model and the selected language, read from the
+WebView user agent — and a line telling the user not to attach invoices, customers,
+the PIN, a backup or logs. *Copy app info* copies the same four lines. This needs
+no permission and no `<queries>` entry, and CI now fails if the merged manifest ever
+declares a `<queries>` block. The support email row only appears when
+`SUPPORT_EMAIL` is set; while it is empty an owner notice appears in development
+builds and release builds show nothing.
+
 ## License and compliance files
 
 Fatorati is **proprietary software** — see `LICENSE` (all rights reserved: no

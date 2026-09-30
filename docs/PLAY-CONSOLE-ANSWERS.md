@@ -29,6 +29,10 @@ local PIN once:
 > **Subscriptions**, and open **Settings** for security, backup, preferences, the
 > tax assistant and the About card.
 
+- **The privacy policy and the terms of use are readable inside the app**, before
+  the PIN is created (small links on the setup form and on the PIN screen) and later
+  under **Settings → Help & legal**, which also holds **Get help** and a searchable
+  **FAQ**. They are the full `docs/legal` texts, bundled offline.
 - **No location, camera or notification permission is requested at launch.** The
   notification permission is only requested after a tap on "Enable reminders" in
   Settings → Subscriptions, so it will not appear in a normal review session.
@@ -167,7 +171,10 @@ The exact list ships in `PRIVACY.md` and is enforced in CI.
 
 1. Fill in `[SUPPORT EMAIL]` in `PRIVACY.md`, `TERMS.md`, `docs/legal/*` and in
    `src/lib/appConfig.ts` (`SUPPORT_EMAIL`), and host the privacy policy; put its
-   URL in `PRIVACY_POLICY_URL` (and the terms URL in `TERMS_URL`).
+   URL in `PRIVACY_POLICY_URL` (and the terms URL in `TERMS_URL`). The in-app copies
+   are generated from `docs/legal/*.md` by `scripts/legal-content.mjs`, so the markdown
+   is the only text to edit; Spanish and Portuguese users see the English document
+   with a translated notice until translations are added.
 2. Replace `[LAST UPDATED]` in those documents with the publication date.
 3. Produce the store assets listed in `store/ASSETS-TODO.md` (icon, feature
    graphic, screenshots with sample data — never fake screenshots of features that

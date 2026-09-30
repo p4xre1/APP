@@ -1,3 +1,40 @@
+# Unreleased — help centre, FAQ and in-app legal texts (2026-09-30)
+
+Offline help and legal area; still version 2.1.0, backup format unchanged.
+
+- **Settings → Help & legal** with four full-screen pages (Get help, FAQ, Privacy
+  policy, Terms of use). The onboarding form and the PIN screen link to the privacy
+  policy and the terms in a modal dialog, so both can be read before anything is
+  entered.
+- **FAQ**: 33 answers in six topics (Data & security, Backup, Invoices, Tax guide,
+  Subscriptions, General) held as data in `src/lib/faq.ts` and translated in all
+  five languages. Search matches the text of the current language, ignoring case,
+  accents and Arabic diacritics. Every answer was verified against the code; the
+  parts that depend on Android rather than this repository are marked in the file
+  header instead of being presented as code behaviour.
+- **Privacy policy and terms of use**: rendered from `docs/legal/*.md`, which stays
+  the single source of truth. `scripts/legal-content.mjs` generates
+  `src/lib/legal-content.generated.ts` and `pnpm build` runs it; a test fails if the
+  generated module and the markdown differ. Spanish and Portuguese read the English
+  document with a translated notice. The pages show the last-updated line and the
+  app version, label the owner placeholders instead of inventing values, parse
+  headings/lists/tables into real elements (no raw HTML) and add an "Open online
+  version" row only when the URL is configured.
+- **Get help**: troubleshooting checklist, self-service block (jump to Backup &
+  Restore, notification permission status) and support rows that stay hidden while
+  unconfigured. "Report a problem" pre-fills a mailto with only the app version,
+  Android version, device model and language; "Copy app info" copies the same four
+  lines. No new permission, no `<queries>`: the values come from the WebView user
+  agent, and CI fails if the merged manifest ever declares `<queries>`.
+- **Tests** (11 new, 134 total): legal text equals the docs byte for byte, every
+  language keeps every section, language fallback, FAQ keys in all five dictionaries
+  and search in AR/FR/EN, release builds hide the unconfigured-contact notice, the
+  report carries no vault data, RTL-aware rendering of every new screen, 48 px tap
+  targets, and the manifest keeps no INTERNET permission and no `<queries>`.
+- Bundle: the five dictionaries grow by 135 KiB (117 new keys each) and the bundled
+  legal text adds 40 KiB to the main chunk; three new lazy chunks cover the new
+  screens.
+
 # Unreleased — subscriptions tracker and reminders (2026-09-30)
 
 Offline subscription tracker (streaming, hosting, rent, insurance, licences) with

@@ -20,7 +20,6 @@ const config: CapacitorConfig = {
       backgroundColor: '#0f172a',
       overlaysWebView: false,
     },
-    Keyboard: { resizeOnFullScreen: true },
   },
   android: {
     backgroundColor: '#f4f6f9',

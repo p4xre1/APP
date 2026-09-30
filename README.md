@@ -245,8 +245,17 @@ Checks performed for this revision:
 - The older browser harness remains for historical reference; its old bottom-navigation selectors need adapting to the new drawer before future use. Its earlier results do not verify this revision.
 - Java/JAVA_HOME and a usable Android SDK remain unavailable in this sandbox. No APK was produced; native device tests were not run for this styling revision.
 
+### Verification levels
+
+Continuous integration (`.github/workflows/android-apk.yml`) runs `tsc`, the Node
+tests, `pnpm audit --audit-level high`, `pnpm build`, `cap sync` and then builds
+the Android project twice: `assembleDebug` (published as an artifact) and an
+unsigned `assembleRelease` so R8/shrink-resources keep-rule problems fail the
+build. That covers the Capacitor 8 / AGP 8.13.0 / Gradle 8.14.3 / minSdk 24 /
+compileSdk 36 upgrade, meaning the app compiles and links against the platform.
+
 ### Still requires physical Android/emulator verification
 
-Native biometric hardware/enrollment/cancellation and its Activity lifecycle, actual Android background/process-death locking, share-sheet delivery to real apps, first-paint/native splash/status-bar behavior, screenshot/recents protection, and debug/release builds with R8/signing have **not** been verified on Android. Browser tests and native-bridge mocks do not establish these. Before distributing: run the build on a Java 21/SDK machine, test all five languages on real screens, background every form/picker/prompt, and transfer a backup between two Android phones. Confirm blocked screenshots, biometric fallback to the PIN, and the PIN/lockout/restore recovery paths.
+Native biometric hardware/enrollment/cancellation and its Activity lifecycle, actual Android background/process-death locking, share-sheet delivery to real apps, first-paint/native splash/status-bar behavior, screenshot/recents protection, and signed release builds have **not** been verified on a device. Browser tests and native-bridge mocks do not establish these. Before distributing: run the build on a Java 21/SDK machine, test all five languages on real screens, background every form/picker/prompt, and transfer a backup between two Android phones. Confirm blocked screenshots, biometric fallback to the PIN, and the PIN/lockout/restore recovery paths.
 
 The source ZIP excludes `.git`, `node_modules`, `dist`, generated Capacitor assets/Cordova scaffolding, local SDK configuration, signing secrets, test artifacts, caches and build outputs. It includes native launcher/splash resources, Android source, Gradle wrapper, lockfile, translations and tests. Build and sync regenerate excluded assets.

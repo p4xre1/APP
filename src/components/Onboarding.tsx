@@ -5,6 +5,7 @@ import { t } from '../i18n'
 import LanguagePicker from './LanguagePicker'
 import CurrencyPicker from './CurrencyPicker'
 import { getPreferences, savePreferences } from '../lib/preferences'
+import { IMAGE_ERRORS, MAX_LOGO_BYTES, readImageFile } from '../lib/images'
 /**
  * Fatorati Offline - Onboarding
  * Welcome to Fatorati - Set up your business to get started
@@ -53,17 +54,15 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   }, [])
   function handleLogoFile(file: File) {
     const guard = sessionGuard()
-    
-    if (file.size > 2 * 1024 * 1024) {
-      setError(t("Logo must be less than 2MB"))
-      return
-    }
-
-    const reader = new FileReader()
-    reader.onload = () => {
-      try { guard(); setLogo(reader.result as string) } catch { /* Locked while reading. */ }
-    }
-    reader.readAsDataURL(file)
+    // Resized and re-encoded before it reaches the vault: a phone photo would
+    // otherwise be stored at full size and travel in every backup.
+    void readImageFile(file, MAX_LOGO_BYTES).then(dataUrl => {
+      guard()
+      setLogo(dataUrl)
+    }).catch((reason: unknown) => {
+      const message = reason instanceof Error && (Object.values(IMAGE_ERRORS) as string[]).includes(reason.message) ? reason.message : 'Operation failed'
+      setError(t(message))
+    })
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -221,7 +220,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                 )}
                 <button type="button" onClick={chooseLogoFile} className="px-3.5 py-2 rounded-lg text-[13px] font-semibold bg-brand-50 text-brand-700 hover:bg-brand-100 transition-all active:scale-[0.98] disabled:opacity-40 shadow-sm">{t('Choose logo')}</button>
               </div>
-              <p className="text-[12px] text-muted mt-1">{t("Max 2MB, PNG/JPG recommended")}</p>
+              <p className="text-[12px] text-muted mt-1">{t('Max 200 KB after resizing. PNG or JPG.')}</p>
             </div>
 
             <div className="pt-2">

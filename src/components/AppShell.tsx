@@ -20,7 +20,7 @@ const navigation: {key:ModuleKey; label:string; group:string; icon:LucideIcon}[]
 ]
 /** Screens that are opened from Settings and never appear in the sidebar. */
 const headings: Partial<Record<ModuleKey,string>> = {
-  taxGuide:'Tax guide', help:'Get help', faq:'FAQ', privacy:'Privacy policy', terms:'Terms of use',
+  taxGuide:'Tax guide', help:'Get help', faq:'FAQ', privacy:'Privacy policy', terms:'Terms of use', templates:'Templates',
 }
 export default function AppShell({active,onNavigate,businessName,children}:{active:ModuleKey;onNavigate:(key:ModuleKey)=>void;businessName:string;children:ReactNode}) {
   const {t}=useI18n(),prefs=usePreferences()

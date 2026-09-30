@@ -10,14 +10,17 @@ import SubscriptionRemindersPanel from '../components/SubscriptionRemindersPanel
  * 100% Local • Offline - Export/Import Backup, Business Settings
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import BackupPanel from '../components/BackupPanel'
 import { useFatorati } from '../store/useFatorati'
 import NumberInput from '../components/NumberInput'
 import { normalizePrefix } from '../lib/fatorati'
+import { chooseLogoFile, subscribePickedLogo, takePickedLogo } from '../lib/backup-picker'
+import { IMAGE_ERRORS, MAX_BACKUP_IMAGE_BYTES, MAX_LOGO_BYTES, MAX_STAMP_BYTES, readImageFile, storedImage } from '../lib/images'
+import { LAYOUTS, PRESETS, TEMPLATE_ACCENTS, templateDefaults, type AccentId, type LayoutId, type PresetId } from '../lib/templates'
 import { APP_VERSION } from '../lib/version'
 import { aboutLinks } from '../lib/appConfig'
-import { Building2, Shield, Info, HelpingHand, ExternalLink, LifeBuoy, CircleHelp, ScrollText, ShieldCheck, ChevronRight, type LucideIcon } from 'lucide-react'
+import { Building2, Shield, Info, HelpingHand, ExternalLink, LifeBuoy, CircleHelp, ScrollText, ShieldCheck, ChevronRight, LayoutTemplate, Palette, Stamp, Image as ImageIcon, type LucideIcon } from 'lucide-react'
 import { ShowTaxAssistantButton } from '../components/TaxAssistant'
 import { assistantVisible, hintsFor, settingsRegion, TAX_DISCLAIMER, TAX_REGION_LABEL, TAX_REGIONS } from '../lib/taxGuide'
 import type { ModuleKey, TaxRegion } from '../store/types'
@@ -40,7 +43,16 @@ export default function Settings({ onNavigate }: { onNavigate?: (key: ModuleKey)
     address: business?.address || '',
     city: business?.city || '',
     taxNumber: business?.taxNumber || '',
+    ifNumber: business?.ifNumber || '',
+    tpNumber: business?.tpNumber || '',
+    rcNumber: business?.rcNumber || '',
+    cnieNumber: business?.cnieNumber || '',
   })
+  const [imageTarget, setImageTarget] = useState<'logo' | 'stamp' | null>(null)
+  // A logo imported before the resize existed can be up to the backup cap; it still shows.
+  const logo = storedImage(business?.logo, MAX_LOGO_BYTES) || storedImage(business?.logo, MAX_BACKUP_IMAGE_BYTES)
+  const stamp = storedImage(business?.stamp, MAX_STAMP_BYTES) || storedImage(business?.stamp, MAX_BACKUP_IMAGE_BYTES)
+  const template = templateDefaults(settings, settingsRegion(settings))
   const [taxRate, setTaxRate] = useState(settings?.taxRate || 0)
   const [invoicePrefix, setInvoicePrefix] = useState(settings?.invoicePrefix || 'INV')
   const [estimatePrefix, setEstimatePrefix] = useState(settings?.estimatePrefix || 'EST')
@@ -50,6 +62,27 @@ export default function Settings({ onNavigate }: { onNavigate?: (key: ModuleKey)
   const links = aboutLinks()
   const assistant = assistantVisible(settings)
   const hints = hintsFor(region)
+
+  useEffect(() => {
+    const receive = () => {
+      const file = takePickedLogo()
+      const target = imageTarget
+      setImageTarget(null)
+      if (!file || !target) return
+      void (async () => {
+        try {
+          const dataUrl = await readImageFile(file, target === 'logo' ? MAX_LOGO_BYTES : MAX_STAMP_BYTES)
+          await updateBusiness(target === 'logo' ? { logo: dataUrl } : { stamp: dataUrl })
+          await showAlert(t('Image updated'))
+        } catch (error) {
+          const message = error instanceof Error && (Object.values(IMAGE_ERRORS) as string[]).includes(error.message) ? error.message : 'Operation failed'
+          await showAlert(t(message))
+        }
+      })()
+    }
+    receive()
+    return subscribePickedLogo(receive)
+  }, [imageTarget, updateBusiness])
 
   /** Settings owns the document region; the assistant region follows it from here. */
   async function handleTaxRegionChange(next: TaxRegion) {
@@ -75,6 +108,10 @@ export default function Settings({ onNavigate }: { onNavigate?: (key: ModuleKey)
         address: form.address,
         city: form.city,
         taxNumber: form.taxNumber.trim(),
+        ifNumber: form.ifNumber.trim(),
+        tpNumber: form.tpNumber.trim(),
+        rcNumber: form.rcNumber.trim(),
+        cnieNumber: form.cnieNumber.trim(),
       })
       await showAlert(t("Business info saved"))
     } catch (error) { await showAlert(errorText(error)) }
@@ -130,6 +167,44 @@ export default function Settings({ onNavigate }: { onNavigate?: (key: ModuleKey)
               <label className={label}>{t(region === 'MA' ? 'ICE (15 digits)' : 'Tax number')}</label>
               <input aria-label={t('Tax number')} value={form.taxNumber} onChange={e => setForm({ ...form, taxNumber: e.target.value })} placeholder={t(region === 'MA' ? 'ICE / IF / TP / RC' : 'EIN / State tax ID')} className={inputClass} />
               {assistant && <span className="mt-1 block text-[11.5px] text-muted">{t(hints.businessTaxNumber)}</span>}
+            </div>
+            {region === 'MA' && <div className="grid grid-cols-2 gap-3.5">
+              <div>
+                <label className={label}>{t('IF number')}</label>
+                <input aria-label={t('IF number')} value={form.ifNumber} onChange={e => setForm({ ...form, ifNumber: e.target.value })} className={inputClass} />
+              </div>
+              <div>
+                <label className={label}>{t('TP number')}</label>
+                <input aria-label={t('TP number')} value={form.tpNumber} onChange={e => setForm({ ...form, tpNumber: e.target.value })} className={inputClass} />
+              </div>
+              <div>
+                <label className={label}>{t('RC number')}</label>
+                <input aria-label={t('RC number')} value={form.rcNumber} onChange={e => setForm({ ...form, rcNumber: e.target.value })} className={inputClass} />
+              </div>
+              <div>
+                <label className={label}>{t('CNIE number')}</label>
+                <input aria-label={t('CNIE number')} value={form.cnieNumber} onChange={e => setForm({ ...form, cnieNumber: e.target.value })} className={inputClass} />
+              </div>
+            </div>}
+            {region === 'MA' && <p className="text-[11.5px] text-muted">{t('Seller identifiers')}: {t('Printed on every Moroccan document. An empty one prints with a dash.')}</p>}
+
+            <div className="space-y-2 border-t border-line pt-3.5">
+              <div className="flex flex-wrap items-center gap-3">
+                {logo
+                  ? <img src={logo} alt={t('Logo')} className="h-16 w-16 rounded-lg border border-line object-cover" />
+                  : <div className="grid h-16 w-16 place-items-center rounded-lg border border-dashed border-line-strong text-faint"><ImageIcon className="h-5 w-5" aria-hidden="true" /></div>}
+                <button type="button" onClick={() => { setImageTarget('logo'); chooseLogoFile() }} className="min-h-12 rounded-lg bg-brand-50 px-3.5 py-2 text-[13px] font-semibold text-brand-700 transition-all hover:bg-brand-100 active:scale-[0.98]">{t('Choose logo')}</button>
+                {logo && <button type="button" onClick={() => void updateBusiness({ logo: undefined }).catch(error => void showAlert(errorText(error)))} className="min-h-12 rounded-lg bg-canvas px-3.5 py-2 text-[13px] text-serious">{t('Remove image')}</button>}
+              </div>
+              <p className="text-[11.5px] text-muted">{t('Max 200 KB after resizing. PNG or JPG.')}</p>
+              <div className="flex flex-wrap items-center gap-3">
+                {stamp
+                  ? <img src={stamp} alt={t('Stamp or signature')} className="h-16 w-16 rounded-lg border border-line object-contain" />
+                  : <div className="grid h-16 w-16 place-items-center rounded-lg border border-dashed border-line-strong text-faint"><Stamp className="h-5 w-5" aria-hidden="true" /></div>}
+                <button type="button" onClick={() => { setImageTarget('stamp'); chooseLogoFile() }} className="min-h-12 rounded-lg bg-brand-50 px-3.5 py-2 text-[13px] font-semibold text-brand-700 transition-all hover:bg-brand-100 active:scale-[0.98]">{t('Choose stamp')}</button>
+                {stamp && <button type="button" onClick={() => void updateBusiness({ stamp: undefined }).catch(error => void showAlert(errorText(error)))} className="min-h-12 rounded-lg bg-canvas px-3.5 py-2 text-[13px] text-serious">{t('Remove image')}</button>}
+              </div>
+              <p className="text-[11.5px] text-muted">{t('Stamp or signature')} · {t('Max 200 KB after resizing. PNG or JPG.')}</p>
             </div>
             <div>
               <label className={label}>{t("Address")}</label>
@@ -187,6 +262,41 @@ export default function Settings({ onNavigate }: { onNavigate?: (key: ModuleKey)
               <p className="text-[12px] text-muted">{t('Numbers are sequential: PREFIX-YEAR-0001. The next number is calculated from the documents you already have.')}</p>
               <p className="text-[12px] text-muted">{t('The tax rate is applied to new invoices and estimates; every document keeps its own rate.')}</p>
               <button onClick={handleSaveDocumentDefaults} className="w-full bg-brand hover:bg-brand-700 text-white px-3.5 py-2 rounded-lg text-[13px] font-semibold transition-all active:scale-[0.98] disabled:opacity-40 shadow-sm">{t('Save document defaults')}</button>
+            </div>
+          </div>
+
+          <div className={card}>
+            <h2 className="text-[14px] font-bold text-ink mb-4 flex items-center gap-2">
+              <LayoutTemplate className="w-5 h-5" />{t('Templates')}</h2>
+            <div className="space-y-3.5">
+              <p className="text-[12px] text-muted">{t('Default template')}: <span className="font-semibold text-ink">{t(LAYOUTS[template.layoutId].label)} · {t(PRESETS[template.presetId].label)}</span></p>
+              <div className="grid grid-cols-2 gap-3.5">
+                <div>
+                  <label className={label}>{t('Default layout')}</label>
+                  <select aria-label={t('Default layout')} value={template.layoutId} onChange={e => void updateSettings({ templateLayout: e.target.value as LayoutId }).catch(error => void showAlert(errorText(error)))} className={inputClass}>
+                    {Object.values(LAYOUTS).map(layout => <option key={layout.id} value={layout.id}>{t(layout.label)}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={label}>{t('Default preset')}</label>
+                  <select aria-label={t('Default preset')} value={template.presetId} onChange={e => void updateSettings({ templatePreset: e.target.value as PresetId }).catch(error => void showAlert(errorText(error)))} className={inputClass}>
+                    {Object.values(PRESETS).map(item => <option key={item.id} value={item.id}>{t(item.label)}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <span className={label}><Palette className="me-1 inline h-3.5 w-3.5" aria-hidden="true" />{t('Document color')}</span>
+                <div className="flex flex-wrap gap-2">
+                  {TEMPLATE_ACCENTS.map(accent => <button key={accent.id} type="button" aria-label={`${t('Document color')} ${t(accent.label)}`} aria-pressed={accent.id === template.accent}
+                    onClick={() => void updateSettings({ templateAccent: accent.id as AccentId }).catch(error => void showAlert(errorText(error)))}
+                    className={`h-10 w-10 rounded-lg border transition-all active:scale-[0.98] ${accent.id === template.accent ? 'border-ink ring-2 ring-brand/25' : 'border-line-strong'}`}
+                    style={accent.hex ? { backgroundColor: accent.hex } : { background: 'linear-gradient(135deg,#2563eb 50%,#0b1220 50%)' }} />)}
+                </div>
+              </div>
+              <button onClick={() => onNavigate?.('templates')} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-canvas px-3.5 py-2 text-[13px] font-medium text-ink">
+                <LayoutTemplate className="h-4 w-4" aria-hidden="true" />{t('Open template preview')}
+              </button>
+              <p className="text-[12px] text-muted">{t('New documents use it. Existing documents keep the template they were saved with.')}</p>
             </div>
           </div>
 

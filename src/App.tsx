@@ -30,6 +30,7 @@ const TaxGuide = lazy(() => import('./modules/TaxGuide'))
 const HelpCenter = lazy(() => import('./modules/HelpCenter'))
 const Faq = lazy(() => import('./modules/Faq'))
 const LegalDocument = lazy(() => import('./modules/LegalDocument'))
+const TemplatePicker = lazy(() => import('./modules/TemplatePicker'))
 
 function Fallback() {
   return (
@@ -132,6 +133,8 @@ export default function App() {
       case 'privacy':
       case 'terms':
         return <LegalDocument kind={active} onBack={() => setActive('settings')} />
+      case 'templates':
+        return <TemplatePicker onBack={() => setActive('settings')} />
       default:
         return <Dashboard onNavigate={setActive} />
     }

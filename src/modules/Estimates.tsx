@@ -1,10 +1,10 @@
 import { Plus, Share2, Pencil, FilePlus2 } from 'lucide-react'
 import { showAlert, askConfirm } from '../lib/dialogs'
-import { useMemo, useState } from 'react'
+import { Suspense, lazy, useMemo, useState } from 'react'
 import { useFatorati } from '../store/useFatorati'
 import { money, number as formatNumber, documentTotals, lineTotal, formatDate } from '../lib/format'
 import { nextDocumentNumber } from '../lib/fatorati'
-import { assistantRegion, assistantStartsOpen, assistantVisible, hintsFor, TAX_REGION_LABEL } from '../lib/taxGuide'
+import { assistantRegion, assistantStartsOpen, assistantVisible, hintsFor, settingsRegion, TAX_REGION_LABEL } from '../lib/taxGuide'
 import { getPreferences } from '../lib/preferences'
 import { shareInvoicePdf } from '../lib/invoice-pdf'
 import { useI18n, usePreferences, errorText } from '../i18n'
@@ -12,6 +12,11 @@ import DocumentOptions, { type DocumentPreferences } from '../components/Documen
 import TaxAssistantPanel, { ShowTaxAssistantButton } from '../components/TaxAssistant'
 import NumberInput from '../components/NumberInput'
 import type { Estimate } from '../store/types'
+import TemplateFields, { LineExtras } from '../components/TemplateFields'
+import { COLUMN_LABEL, PRESETS, documentTemplate, presetIsTaxExempt, presetLabels, presetRateHint, templateColumns, templateDefaults, type DocumentTemplate } from '../lib/templates'
+import { mandatoryFields } from '../lib/template-render'
+
+const TemplatePicker = lazy(() => import('./TemplatePicker').then(module => ({ default: module.TemplatePicker })))
 
 type Status = Estimate['status']
 const STATUSES: Status[] = ['draft', 'sent', 'accepted', 'declined']
@@ -23,8 +28,12 @@ export default function Estimates() {
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Estimate | null>(null)
   const [busy, setBusy] = useState(false)
+  const [preview, setPreview] = useState(false)
   const [form, setForm] = useState(() => ({
     customerId: '', description: '', quantity: 1, unitPrice: 0, notes: '',
+    unit: '', section: '', discount: undefined as number | undefined,
+    paymentMethod: '',
+    template: templateDefaults(settings, settingsRegion(settings)) as DocumentTemplate,
     taxRate: settings?.taxRate || 0,
     currency: getPreferences().defaultCurrency, language: getPreferences().language,
     pdfColor: getPreferences().pdfColor,
@@ -34,14 +43,24 @@ export default function Estimates() {
 
   const prefix = settings?.estimatePrefix || 'EST'
   const nextNumber = useMemo(() => nextDocumentNumber(estimates.map(row => row.number), prefix, 'EST'), [estimates, prefix])
-  const totals = documentTotals([{ quantity: form.quantity, unitPrice: form.unitPrice }], form.taxRate, form.currency)
+  const exempt = presetIsTaxExempt(form.template)
+  const effectiveRate = exempt ? 0 : form.taxRate
+  const totals = documentTotals([{ quantity: form.quantity, unitPrice: form.unitPrice, discount: form.discount }], effectiveRate, form.currency)
   const assistant = assistantVisible(settings)
-  const region = assistantRegion(settings)
-  const hints = hintsFor(region)
+  const region = settingsRegion(settings)
+  const assistantRegionValue = assistantRegion(settings)
+  const hints = hintsFor(assistantRegionValue)
+  const columns = templateColumns(form.template)
+  const preset = PRESETS[form.template.presetId]
+  const selectedCustomer = customers.find(c => c.id === form.customerId)
+  const missing = mandatoryFields({ region, business, customer: selectedCustomer, template: form.template, paymentMethod: form.paymentMethod, language: form.language || prefs.language }).missing
 
   function openCreate() {
     setForm({
       customerId: '', description: '', quantity: 1, unitPrice: 0, notes: '',
+      unit: '', section: '', discount: undefined,
+      paymentMethod: '',
+      template: templateDefaults(settings, region),
       taxRate: settings?.taxRate || 0,
       currency: prefs.defaultCurrency, language: prefs.language, pdfColor: prefs.pdfColor,
       exchangeRate: undefined, rateCurrency: undefined,
@@ -55,7 +74,10 @@ export default function Estimates() {
       description: item?.description || '',
       quantity: item?.quantity ?? 1,
       unitPrice: item?.unitPrice ?? 0,
+      unit: item?.unit || '', section: item?.section || '', discount: item?.discount,
       notes: estimate.notes,
+      paymentMethod: estimate.paymentMethod || '',
+      template: documentTemplate(estimate.template, region),
       taxRate: estimate.taxRate || 0,
       currency: estimate.currency || prefs.defaultCurrency,
       language: estimate.language || prefs.language,
@@ -69,11 +91,21 @@ export default function Estimates() {
     if (!form.customerId || !form.description.trim()) { await showAlert(t('Choose a customer and a description')); return }
     setBusy(true)
     try {
-      const item = { id: editing?.items[0]?.id || crypto.randomUUID(), description: form.description.trim(), quantity: form.quantity, unitPrice: form.unitPrice, total: lineTotal(form.quantity, form.unitPrice, form.currency) }
+      const rate = presetIsTaxExempt(form.template) ? 0 : form.taxRate
+      const recalculated = documentTotals([{ quantity: form.quantity, unitPrice: form.unitPrice, discount: form.discount }], rate, form.currency)
+      const item = {
+        id: editing?.items[0]?.id || crypto.randomUUID(), description: form.description.trim(),
+        quantity: form.quantity, unitPrice: form.unitPrice,
+        ...(form.unit ? { unit: form.unit } : {}),
+        ...(form.section ? { section: form.section } : {}),
+        ...(form.discount ? { discount: form.discount } : {}),
+        total: lineTotal(form.quantity, form.unitPrice, form.currency, form.discount),
+      }
       const payload = {
         customerId: form.customerId, currency: form.currency, language: form.language, pdfColor: form.pdfColor,
-        exchangeRate: form.exchangeRate, rateCurrency: form.rateCurrency, taxRate: form.taxRate,
-        items: [item], subtotal: totals.subtotal, tax: totals.tax, total: totals.total, notes: form.notes,
+        exchangeRate: form.exchangeRate, rateCurrency: form.rateCurrency, taxRate: rate,
+        paymentMethod: form.paymentMethod, template: form.template,
+        items: [item], subtotal: recalculated.subtotal, tax: recalculated.tax, total: recalculated.total, notes: form.notes,
       }
       if (editing) await updateEstimate(editing.id, payload)
       else await addEstimate({
@@ -125,7 +157,7 @@ export default function Estimates() {
 
   async function share(estimate: Estimate) {
     setBusy(true)
-    try { await shareInvoicePdf(estimate, business, customers.find(c => c.id === estimate.customerId), estimate.currency) }
+    try { await shareInvoicePdf(estimate, business, customers.find(c => c.id === estimate.customerId), estimate.currency, settings) }
     catch (error) { await showAlert(errorText(error)) } finally { setBusy(false) }
   }
 
@@ -145,6 +177,28 @@ export default function Estimates() {
       </div>
       <div className="space-y-4">
         <DocumentOptions value={form} onChange={patch => setForm({ ...form, ...patch })} />
+
+        <div className="rounded-lg border border-line bg-canvas/40 p-4">
+          <h3 className="mb-3 text-[13px] font-bold text-ink">{t('Template')}</h3>
+          <TemplateFields
+            value={form.template}
+            rateHint={presetRateHint(form.template)}
+            missing={missing}
+            onChange={patch => setForm(current => ({
+              ...current,
+              template: { ...current.template, ...patch },
+              ...(patch.presetId !== undefined && presetIsTaxExempt({ ...current.template, ...patch }) ? { taxRate: 0 } : {}),
+            }))}
+            onPreview={() => setPreview(true)}
+          />
+          <label className="mt-3.5 block">
+            <span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t('Payment method')}</span>
+            <select aria-label={t('Payment method')} value={form.paymentMethod} onChange={e => setForm({ ...form, paymentMethod: e.target.value })} className={inputClass}>
+              <option value="">—</option>
+              {['Bank transfer', 'Cash', 'Cheque', 'Card', 'Other'].map(method => <option key={method} value={method}>{t(method)}</option>)}
+            </select>
+          </label>
+        </div>
         <label className="block">
           <span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t('Customer')}</span>
           <select aria-label={t('Customer')} value={form.customerId} onChange={e => setForm({ ...form, customerId: e.target.value })} className={inputClass}><option value="">{t('Select customer')}</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
@@ -153,25 +207,29 @@ export default function Estimates() {
           <span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t('Description')}</span>
           <input aria-label={t('Description')} placeholder={t('Description')} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className={inputClass} />
         </label>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <label className="block">
+        <div className="grid grid-cols-12 gap-2">
+          <div className="col-span-12 sm:col-span-5">
             <span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t('Quantity')}</span>
-            <NumberInput aria-label={t('Quantity')} value={form.quantity} onChange={quantity => setForm({ ...form, quantity })} className={inputClass} />
-          </label>
-          <label className="block">
+            <NumberInput aria-label={t(presetLabels(form.template.presetId).quantity || COLUMN_LABEL.quantity)} value={form.quantity} onChange={quantity => setForm({ ...form, quantity })} className={inputClass} />
+          </div>
+          <div className="col-span-12 sm:col-span-5">
             <span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t('Unit price')}</span>
             <NumberInput aria-label={t('Unit price')} value={form.unitPrice} onChange={unitPrice => setForm({ ...form, unitPrice })} className={inputClass} />
-          </label>
+          </div>
+          <LineExtras line={form} columns={columns} groupBy={preset.groupBy} units={preset.unitSuggestions}
+            onChange={patch => setForm(current => ({ ...current, ...patch }))} />
         </div>
         <label className="block">
           <span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t('Tax rate')} (%)</span>
-          <NumberInput aria-label={t('Tax rate')} value={form.taxRate} onChange={taxRate => setForm({ ...form, taxRate: Math.min(taxRate, 1000) })} className={inputClass} />
-          {assistant && <span className="mt-1 block text-[11.5px] text-muted">{t(hints.taxRate)}</span>}
+          <NumberInput aria-label={t('Tax rate')} value={effectiveRate} disabled={exempt} onChange={taxRate => setForm({ ...form, taxRate: Math.min(taxRate, 1000) })} className={inputClass} />
+          {exempt
+            ? <span className="mt-1 block text-[11.5px] text-muted">{t('TVA non applicable')} · {t('No TVA: the exemption mention replaces the tax lines.')}</span>
+            : assistant && <span className="mt-1 block text-[11.5px] text-muted">{t(hints.taxRate)}</span>}
         </label>
 
         {assistant ? (
           <TaxAssistantPanel
-            region={region}
+            region={assistantRegionValue}
             onRegionChange={next => void updateSettings({ taxAssistantRegion: next }).catch(() => undefined)}
             onApplyRegion={next => void updateSettings({ taxRegion: next, taxAssistantRegion: next }).catch(() => undefined)}
             onHide={() => void updateSettings({ taxAssistantVisible: false }).catch(() => undefined)}
@@ -181,11 +239,11 @@ export default function Estimates() {
         ) : (
           <ShowTaxAssistantButton onShow={() => void updateSettings({ taxAssistantVisible: true }).catch(() => undefined)} />
         )}
-        {assistant && <p className="text-[12px] text-muted">{t('{region} guidance is on for this form.', { region: t(TAX_REGION_LABEL[region]) })}</p>}
+        {assistant && <p className="text-[12px] text-muted">{t('{region} guidance is on for this form.', { region: t(TAX_REGION_LABEL[assistantRegionValue]) })}</p>}
         {assistant && region === 'MA' && <p className="text-[12px] text-muted">{t(hints.customerTax)}</p>}
         <div className="bg-canvas p-4 rounded-lg space-y-2">
           <div className="flex justify-between text-[13px]"><span>{t('Subtotal:')}</span><span className="font-medium">{money(totals.subtotal, form.currency, false, form.language)}</span></div>
-          <div className="flex justify-between text-[13px]"><span>{t('Tax')}:</span><span className="font-medium">{money(totals.tax, form.currency, false, form.language)}</span></div>
+          <div className="flex justify-between text-[13px]"><span>{t('Tax')} {effectiveRate ? `(${formatNumber(effectiveRate)}%)` : ''}:</span><span className="font-medium">{money(totals.tax, form.currency, false, form.language)}</span></div>
           <div className="flex justify-between text-[13px] font-bold pt-2 border-t border-line"><span>{t('Total:')}</span><span>{money(totals.total, form.currency, false, form.language)}</span></div>
         </div>
         <label className="block">
@@ -198,6 +256,23 @@ export default function Estimates() {
         </div>
       </div>
     </div>}
+
+    {preview && <Suspense fallback={<div className="fixed inset-0 z-50 grid place-items-center bg-canvas"><p className="text-[13px] text-muted">{t('Loading...')}</p></div>}>
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-canvas p-4 sm:p-6">
+        <TemplatePicker
+          value={form.template}
+          onChange={patch => setForm(current => ({ ...current, template: { ...current.template, ...patch } }))}
+          onApply={next => { setForm(current => ({ ...current, template: next, taxRate: presetIsTaxExempt(next) ? 0 : current.taxRate })); setPreview(false) }}
+          onBack={() => setPreview(false)}
+          applyLabel="Use this template"
+          region={region}
+          language={form.language || prefs.language}
+          currency={form.currency}
+          logo={business?.logo}
+          stamp={business?.stamp}
+        />
+      </div>
+    </Suspense>}
 
     <div className="bg-surface rounded-xl border border-line overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
       {estimates.length === 0 ? <div className="text-center py-12">

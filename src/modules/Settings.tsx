@@ -16,9 +16,10 @@ import { useFatorati } from '../store/useFatorati'
 import NumberInput from '../components/NumberInput'
 import { normalizePrefix } from '../lib/fatorati'
 import { APP_VERSION } from '../lib/version'
-import { Building2, Shield, Info, HelpingHand } from 'lucide-react'
+import { aboutLinks } from '../lib/appConfig'
+import { Building2, Shield, Info, HelpingHand, ExternalLink } from 'lucide-react'
 import { ShowTaxAssistantButton } from '../components/TaxAssistant'
-import { assistantVisible, hintsFor, settingsRegion, TAX_REGION_LABEL, TAX_REGIONS } from '../lib/taxGuide'
+import { assistantVisible, hintsFor, settingsRegion, TAX_DISCLAIMER, TAX_REGION_LABEL, TAX_REGIONS } from '../lib/taxGuide'
 import type { ModuleKey, TaxRegion } from '../store/types'
 
 export default function Settings({ onNavigate }: { onNavigate?: (key: ModuleKey) => void }) {
@@ -38,6 +39,8 @@ export default function Settings({ onNavigate }: { onNavigate?: (key: ModuleKey)
   const [estimatePrefix, setEstimatePrefix] = useState(settings?.estimatePrefix || 'EST')
   const inputClass = 'w-full px-3 py-2 border border-line-strong rounded-lg text-[13.5px] bg-surface text-ink outline-none transition-colors placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-brand/15'
   const region = settingsRegion(settings)
+  // Owner links ship empty; unconfigured rows stay hidden instead of showing a dead contact.
+  const links = aboutLinks()
   const assistant = assistantVisible(settings)
   const hints = hintsFor(region)
 
@@ -212,7 +215,7 @@ export default function Settings({ onNavigate }: { onNavigate?: (key: ModuleKey)
 
           <div className={card}>
             <h2 className="text-[14px] font-bold text-ink mb-4 flex items-center gap-2">
-              <Info className="w-5 h-5" />{t("App Info")}</h2>
+              <Info className="w-5 h-5" />{t("About")}</h2>
             <div className="space-y-2 text-[13px]">
               <div className="flex justify-between">
                 <span className="text-muted">{t("App Name")}</span>
@@ -228,11 +231,24 @@ export default function Settings({ onNavigate }: { onNavigate?: (key: ModuleKey)
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-muted">{t('Currency')}</span>
-                <select aria-label={`${t('App Info')} — ${t('Currency')}`} value={prefs.defaultCurrency} onChange={e => void handleCurrencyChange(e.target.value)} className="text-[13.5px] border border-line-strong rounded px-2 py-1 bg-surface text-ink outline-none transition-colors placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-brand/15">
+                <select aria-label={`${t('About')} — ${t('Currency')}`} value={prefs.defaultCurrency} onChange={e => void handleCurrencyChange(e.target.value)} className="text-[13.5px] border border-line-strong rounded px-2 py-1 bg-surface text-ink outline-none transition-colors placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-brand/15">
                   {supportedValues('currency').map(code => <option key={code} value={code}>{code}</option>)}
                 </select>
               </div>
             </div>
+            {links.length > 0 && (
+              <div className="mt-4 space-y-2 border-t border-line pt-3">
+                {links.map(link => (
+                  <a key={link.label} href={link.href} target={link.external ? '_blank' : undefined} rel={link.external ? 'noopener noreferrer' : undefined}
+                    className="flex min-h-12 items-center justify-between gap-3 rounded-lg bg-brand-50 px-3.5 py-2 text-[13px] font-medium text-brand transition-colors hover:bg-brand-100">
+                    <span>{t(link.label)}</span>
+                    <ExternalLink className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  </a>
+                ))}
+                {links.some(link => link.external) && <p className="text-[11.5px] text-muted">{t('Opens in your browser')}</p>}
+              </div>
+            )}
+            <p className="mt-4 text-[12px] text-muted">{t(TAX_DISCLAIMER)}</p>
           </div>
         </div>
       </div>

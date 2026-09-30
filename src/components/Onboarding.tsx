@@ -176,7 +176,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder={t("owner@business.com")}
+                  placeholder={t("Example email")}
                   className="w-full px-3 py-2 text-[13.5px] border border-line-strong rounded-lg focus:ring-2 outline-none bg-surface text-ink transition-colors placeholder:text-faint focus:border-brand focus:ring-brand/15"
                 />
               </div>

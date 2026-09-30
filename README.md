@@ -224,8 +224,18 @@ without written permission). Bundled third-party components are listed in
 `NOTICE.md` (Capacitor MIT, the biometric plugin MPL-2.0, OFL fonts with their
 license texts in `public/fonts/`). User-facing policies live in `PRIVACY.md`
 (no data collected, no network permission, uninstall deletes everything) and
-`SECURITY.md` (disclosure process, threat model, what the app does not protect
-against). Complete Google Play Data safety answers are listed in `PRIVACY.md`.
+`TERMS.md` (as-is, no warranty, not tax or legal advice, no PIN recovery, you own
+your backups and the accuracy of your documents) and `SECURITY.md` (disclosure
+process, threat model, what the app does not protect
+against). Complete Google Play Data safety answers are listed in `PRIVACY.md`;
+the console-by-console answers are in `docs/PLAY-CONSOLE-ANSWERS.md` and the
+listing copy in `store/`.
+
+**Owner links are configuration, not code.** `src/lib/appConfig.ts` holds the
+support address and the policy/terms URLs, all **empty by default**. Settings →
+About renders a row only for a value that is filled in *and* plausible, so an
+unconfigured build shows no dead contact and no invented URL. Host
+`docs/legal/privacy.<lang>.md` publicly and paste that URL there before release.
 
 
 ## Development/build
@@ -246,7 +256,7 @@ cd android
 (the shipped `index.html` keeps `connect-src 'none'`); `pnpm build` output is
 unchanged by it. `pnpm preview` serves the production bundle locally.
 
-APK path: `android/app/build/outputs/apk/debug/app-debug.apk`. The retained GitHub Android workflow uses Java 21 and fail-fast install/typecheck/tests/build/sync/Gradle steps. No retries or failure suppression.
+APK path: `android/app/build/outputs/apk/debug/app-debug.apk`. The retained GitHub Android workflow uses Java 21 and fail-fast install/typecheck/tests/build/sync/Gradle steps. No retries or failure suppression. It also proves that `cap sync` leaves the tracked native files untouched, that the Gradle version agrees with `package.json` and `android/version.properties`, and that the merged release manifest contains no permission outside the documented allowlist (no `INTERNET`, no storage, no exact alarms).
 
 ### Release build — signed .aab with your upload key
 

@@ -52,7 +52,7 @@ to **3.2.0**.
   import: the 3.1.0 → 3.2.0 migration adds an empty notes list and changes nothing
   else. Notes travel in the encrypted `.fatorati` backup only — never in the CSV, PDF
   or Excel exports — and `resetApp`/lock clear them like every other record.
-- **Tests** (59 new, 207 total): note model/caps/palette contrast, filters, search
+- **Tests** (65 new, 213 total): note model/caps/palette contrast, filters, search
   (accents and Arabic variants) and sorting; backup migration from 3.1.0, thirteen
   rejected import shapes and the record cap, encryption of stored notes, reset and
   lock; draft round-trip, staleness, wrong-key, damage, debounce and failure paths;
@@ -62,7 +62,8 @@ to **3.2.0**.
   mocked plugin (scheduled, capped, cancelled, rescheduled after a restore,
   hidden-text mode, denied permission, plugin failure); the screens rendered in all
   five languages with Arabic RTL, escaped note text, a labelled grid, 48 px targets
-  and the closed palette.
+  and the closed palette; and the one-shot navigation intent that opens the record a
+  calendar row points at.
 
 # Unreleased — document templates for invoices and estimates (2026-09-30)
 

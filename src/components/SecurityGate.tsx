@@ -10,6 +10,8 @@ import { applyImportedPreferences } from '../lib/db'
 import { usePreferences, useI18n, errorText } from '../i18n'
 import { number } from '../lib/format'
 import LanguagePicker from './LanguagePicker'
+import LegalOverlay from './LegalOverlay'
+import type { LegalKind } from '../lib/legal'
 import { useFatorati } from '../store/useFatorati'
 
 export default function SecurityGate({ children }: {children:ReactNode}) {
@@ -17,6 +19,7 @@ export default function SecurityGate({ children }: {children:ReactNode}) {
   const [configured,setConfigured]=useState<boolean|null>(null),[biometric,setBiometric]=useState(false)
   const [pin,setPin]=useState(''),[repeat,setRepeat]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('')
   const [blocked,setBlocked]=useState(0),[clock,setClock]=useState(Date.now()),[ready,setReady]=useState(false)
+  const [legal,setLegal]=useState<LegalKind|null>(null)
   const refresh=async()=>{const meta=await readMeta();setConfigured(!!meta.salt);setBiometric(meta.biometric);setBlocked(meta.blockedUntil)}
   useEffect(()=>{void refresh().catch(e=>setError(errorText(e)))},[unlocked])
   useEffect(()=>{
@@ -71,7 +74,12 @@ export default function SecurityGate({ children }: {children:ReactNode}) {
       {blocked>clock&&<p role="status">{t('Wait seconds',{count:number(Math.ceil((blocked-clock)/1000))})}</p>}
       {error&&<p role="alert" className="text-serious text-[13px]">{t(error)}</p>}
       <button disabled={busy} onClick={()=>void reset()} className="text-serious text-[13px]">{t('Reset app')}</button>
+      <div className="flex flex-wrap items-center gap-x-4">
+        <button type="button" onClick={()=>setLegal('privacy')} className="min-h-12 text-[12px] font-medium text-muted underline underline-offset-2 transition-colors hover:text-ink">{t('Privacy policy')}</button>
+        <button type="button" onClick={()=>setLegal('terms')} className="min-h-12 text-[12px] font-medium text-muted underline underline-offset-2 transition-colors hover:text-ink">{t('Terms of use')}</button>
+      </div>
       </div>
     </div>
+    {legal&&<LegalOverlay kind={legal} onClose={()=>setLegal(null)} />}
   </div>
 }

@@ -14,6 +14,8 @@ import { getPreferences, savePreferences } from '../lib/preferences'
 
 import { useEffect, useState } from 'react'
 import BackupPanel from './BackupPanel'
+import LegalOverlay from './LegalOverlay'
+import type { LegalKind } from '../lib/legal'
 import type { FormEvent } from 'react'
 import { Loader2, Building2, User, Phone, Mail, MapPin, Image as ImageIcon } from 'lucide-react'
 
@@ -41,6 +43,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   const [logo, setLogo] = useState<string | undefined>()
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [legal, setLegal] = useState<LegalKind | null>(null)
 
   const canSubmit = businessName.trim() && ownerName.trim() && !submitting
 
@@ -235,12 +238,17 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                 )}
               </button>
               <p className="text-[12px] text-muted text-center mt-3">{t("No account required • Your data stays on device")}</p>
+              <div className="mt-1 flex flex-wrap items-center justify-center gap-x-4">
+                <button type="button" onClick={() => setLegal('privacy')} className="min-h-12 text-[12px] font-medium text-muted underline underline-offset-2 transition-colors hover:text-ink">{t('Privacy policy')}</button>
+                <button type="button" onClick={() => setLegal('terms')} className="min-h-12 text-[12px] font-medium text-muted underline underline-offset-2 transition-colors hover:text-ink">{t('Terms of use')}</button>
+              </div>
             </div>
           </form>
         </div>
 
         <p className="text-center text-muted text-[12px] mt-6">{t("Fatorati • Simple business management • Works offline")}</p>
       </div>
+      {legal && <LegalOverlay kind={legal} onClose={() => setLegal(null)} />}
     </div>
   )
 }

@@ -27,6 +27,9 @@ const Settings = lazy(() => import('./modules/Settings'))
 const Reports = lazy(() => import('./modules/Reports'))
 const Subscriptions = lazy(() => import('./modules/Subscriptions'))
 const TaxGuide = lazy(() => import('./modules/TaxGuide'))
+const HelpCenter = lazy(() => import('./modules/HelpCenter'))
+const Faq = lazy(() => import('./modules/Faq'))
+const LegalDocument = lazy(() => import('./modules/LegalDocument'))
 
 function Fallback() {
   return (
@@ -122,6 +125,13 @@ export default function App() {
         return <Settings onNavigate={setActive} />
       case 'taxGuide':
         return <TaxGuide onBack={() => setActive('settings')} />
+      case 'help':
+        return <HelpCenter onBack={() => setActive('settings')} onNavigate={setActive} />
+      case 'faq':
+        return <Faq onBack={() => setActive('help')} />
+      case 'privacy':
+      case 'terms':
+        return <LegalDocument kind={active} onBack={() => setActive('settings')} />
       default:
         return <Dashboard onNavigate={setActive} />
     }

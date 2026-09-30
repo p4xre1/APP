@@ -18,6 +18,8 @@ export type ModuleKey =
   | 'settings'
   /** Full-screen tax guide; opened from Settings, not part of the sidebar. */
   | 'taxGuide'
+  /** Help & legal screens; opened from Settings and from the screens before the app. */
+  | 'help' | 'faq' | 'privacy' | 'terms'
 
 /** Billing cadence of a tracked subscription. */
 export type SubscriptionCycle = 'monthly' | 'yearly' | 'one_time_period'

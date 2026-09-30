@@ -81,13 +81,17 @@ test('the About card is keyed off the configuration, not off a literal', () => {
   assert.equal(settingsSource.includes('owner@business.com'), false)
 })
 
-test('with the shipped configuration the rendered About card holds no link at all', async () => {
+test('with the shipped configuration nothing in Settings links outside the app', async () => {
   const { default: Settings } = await import('../src/modules/Settings')
   const html = renderToStaticMarkup(createElement(Settings, {}))
   assert.ok(html.includes('About'), 'the About card must render')
   assert.ok(html.includes('General information, not tax advice'), 'the tax disclaimer must render')
-  assert.equal(html.includes('Privacy policy'), false)
-  assert.equal(html.includes('Terms of use'), false)
-  assert.equal(html.includes('mailto:'), false)
+  assert.ok(html.includes('Help &amp; legal'), 'the Help & legal card must render')
+  // Privacy policy / Terms of use / Get help / FAQ are in-app navigation buttons,
+  // so the page still renders no link at all while the configuration is empty:
+  // no href, no mailto, no external target and no "opens in your browser" note.
   assert.deepEqual([...html.matchAll(/href="[^"]*"/g)].map(match => match[0]), [])
+  assert.equal(html.includes('mailto:'), false)
+  assert.equal(html.includes('target="_blank"'), false)
+  assert.equal(html.includes('Opens in your browser'), false)
 })

@@ -17,10 +17,17 @@ import NumberInput from '../components/NumberInput'
 import { normalizePrefix } from '../lib/fatorati'
 import { APP_VERSION } from '../lib/version'
 import { aboutLinks } from '../lib/appConfig'
-import { Building2, Shield, Info, HelpingHand, ExternalLink } from 'lucide-react'
+import { Building2, Shield, Info, HelpingHand, ExternalLink, LifeBuoy, CircleHelp, ScrollText, ShieldCheck, ChevronRight, type LucideIcon } from 'lucide-react'
 import { ShowTaxAssistantButton } from '../components/TaxAssistant'
 import { assistantVisible, hintsFor, settingsRegion, TAX_DISCLAIMER, TAX_REGION_LABEL, TAX_REGIONS } from '../lib/taxGuide'
 import type { ModuleKey, TaxRegion } from '../store/types'
+
+const HELP_ROWS: { key: ModuleKey; label: string; icon: LucideIcon }[] = [
+  { key: 'help', label: 'Get help', icon: LifeBuoy },
+  { key: 'faq', label: 'FAQ', icon: CircleHelp },
+  { key: 'privacy', label: 'Privacy policy', icon: ShieldCheck },
+  { key: 'terms', label: 'Terms of use', icon: ScrollText },
+]
 
 export default function Settings({ onNavigate }: { onNavigate?: (key: ModuleKey) => void }) {
   const prefs = usePreferences()
@@ -249,6 +256,20 @@ export default function Settings({ onNavigate }: { onNavigate?: (key: ModuleKey)
               </div>
             )}
             <p className="mt-4 text-[12px] text-muted">{t(TAX_DISCLAIMER)}</p>
+          </div>
+
+          <div className={card}>
+            <h2 className="text-[14px] font-bold text-ink mb-4 flex items-center gap-2">
+              <LifeBuoy className="w-5 h-5" />{t('Help & legal')}</h2>
+            <p className="text-[13px] text-muted">{t('Read the FAQ, the privacy policy and the terms of use, all offline.')}</p>
+            <div className="mt-3 space-y-2">
+              {HELP_ROWS.map(({ key, label, icon: Icon }) => (
+                <button key={key} onClick={() => onNavigate?.(key)} className="flex min-h-12 w-full items-center justify-between gap-3 rounded-lg bg-canvas px-3.5 py-2 text-start text-[13px] font-medium text-ink transition-colors hover:bg-brand-50">
+                  <span className="flex items-center gap-2"><Icon className="h-4 w-4 text-brand" aria-hidden="true" />{t(label)}</span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted directional" aria-hidden="true" />
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>

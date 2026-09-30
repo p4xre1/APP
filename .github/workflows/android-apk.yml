@@ -155,6 +155,15 @@ jobs:
           printf '%s\n' "$perms" | grep -q 'android.permission.POST_NOTIFICATIONS' \
             || { echo '::error::POST_NOTIFICATIONS is missing; subscription reminders cannot work'; exit 1; }
 
+          # The help screens open a mailto: intent and nothing else. Implicit intents
+          # need no package visibility, so any <queries> block would be an unexplained
+          # addition to the manifest (a dependency pulling it in, for example).
+          if grep -q '<queries' "$manifest"; then
+            echo '::error::the merged manifest declares <queries>; the help screens must not query installed packages'
+            exit 1
+          fi
+          printf '::notice::merged release manifest declares no <queries> block\n'
+
           {
             echo "### Permissions in the merged release manifest"
             echo '```'

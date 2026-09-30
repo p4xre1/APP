@@ -40,6 +40,30 @@ jobs:
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           ./gradlew assembleDebug --no-daemon --stacktrace
 
+      # The plugin manifest declares SCHEDULE_EXACT_ALARM; the app removes it with
+      # tools:node="remove" because reminders are deliberately inexact. This checks
+      # what the Android manifest merger actually produced.
+      - name: Verify the merged Android manifest
+        working-directory: android
+        run: |
+          set -euo pipefail
+          manifest=$(find app/build/intermediates -name AndroidManifest.xml -path '*merged_manifest*' | head -1)
+          while [ -z "$manifest" ]; do
+            manifest=$(find app/build/intermediates -name AndroidManifest.xml | head -1)
+            break
+          done
+          echo "merged manifest: $manifest"
+          test -s "$manifest"
+          grep -q 'POST_NOTIFICATIONS' "$manifest"
+          if grep -qE 'SCHEDULE_EXACT_ALARM|USE_EXACT_ALARM' "$manifest"; then
+            echo '::error::exact-alarm permission leaked into the merged manifest'
+            exit 1
+          fi
+          if grep -q 'android.permission.INTERNET' "$manifest"; then
+            echo '::error::INTERNET permission leaked into the merged manifest'
+            exit 1
+          fi
+
       # R8/minify/shrinkResources only run in release, so this catches keep-rule
       # regressions before a signed build. The APK is unsigned and not published.
       - name: Verify the release build compiles (R8, unsigned)

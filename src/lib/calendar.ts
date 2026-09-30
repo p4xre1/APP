@@ -13,6 +13,7 @@
  */
 
 import { dayNumber, isISODate, parseISODate, subscribeEndOrRenewal, todayISO, warnDays as clampWarnDays } from './subscriptions'
+import { effectiveStatus } from './status'
 import { isDated, noteTitle, noteTime } from './notes'
 import type { Estimate, Invoice, Note, Subscription } from '../store/types'
 
@@ -161,8 +162,12 @@ export function collectCalendarItems(sources: CalendarSources, options: Calendar
   }
 
   for (const invoice of sources.invoices) {
+    // A credit note is not receivable: nothing to chase on a due date.
+    if (invoice.kind === 'credit_note') continue
     if (invoice.status === 'paid' || !isISODate(invoice.dueDate)) continue
-    const overdue = dayNumber(invoice.dueDate) < dayNumber(today)
+    // The same rule as the list and the reports: only a *sent* invoice rolls into
+    // overdue by date; a draft is not owed yet, and a manual 'overdue' stays one.
+    const overdue = effectiveStatus(invoice, today) === 'overdue'
     items.push({
       key: `invoice:${invoice.id}`, kind: 'invoice', group: 'invoices', id: invoice.id, date: invoice.dueDate,
       label: overdue ? 'Overdue invoice' : 'Invoice due', detail: invoice.number, overdue,

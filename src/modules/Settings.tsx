@@ -15,6 +15,7 @@ import BackupPanel from '../components/BackupPanel'
 import { useFatorati } from '../store/useFatorati'
 import NumberInput from '../components/NumberInput'
 import { normalizePrefix } from '../lib/fatorati'
+import { clampDueDays } from '../lib/status'
 import { chooseLogoFile, subscribePickedLogo, takePickedLogo } from '../lib/backup-picker'
 import { IMAGE_ERRORS, MAX_BACKUP_IMAGE_BYTES, MAX_LOGO_BYTES, MAX_STAMP_BYTES, readImageFile, storedImage } from '../lib/images'
 import { LAYOUTS, PRESETS, TEMPLATE_ACCENTS, templateDefaults, type AccentId, type LayoutId, type PresetId } from '../lib/templates'
@@ -56,6 +57,8 @@ export default function Settings({ onNavigate }: { onNavigate?: (key: ModuleKey)
   const [taxRate, setTaxRate] = useState(settings?.taxRate || 0)
   const [invoicePrefix, setInvoicePrefix] = useState(settings?.invoicePrefix || 'INV')
   const [estimatePrefix, setEstimatePrefix] = useState(settings?.estimatePrefix || 'EST')
+  const [defaultDueDays, setDefaultDueDays] = useState(clampDueDays(settings?.defaultDueDays))
+  const [creditNotePrefix, setCreditNotePrefix] = useState(settings?.creditNotePrefix || 'AV')
   const inputClass = 'w-full px-3 py-2 border border-line-strong rounded-lg text-[13.5px] bg-surface text-ink outline-none transition-colors placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-brand/15'
   const region = settingsRegion(settings)
   // Owner links ship empty; unconfigured rows stay hidden instead of showing a dead contact.
@@ -122,9 +125,13 @@ export default function Settings({ onNavigate }: { onNavigate?: (key: ModuleKey)
         taxRate: Math.min(Math.max(taxRate, 0), 1000),
         invoicePrefix: normalizePrefix(invoicePrefix, 'INV'),
         estimatePrefix: normalizePrefix(estimatePrefix, 'EST'),
+        defaultDueDays: clampDueDays(Math.round(defaultDueDays)),
+        creditNotePrefix: normalizePrefix(creditNotePrefix, 'AV'),
       })
       setInvoicePrefix(normalizePrefix(invoicePrefix, 'INV'))
       setEstimatePrefix(normalizePrefix(estimatePrefix, 'EST'))
+      setDefaultDueDays(clampDueDays(Math.round(defaultDueDays)))
+      setCreditNotePrefix(normalizePrefix(creditNotePrefix, 'AV'))
       await showAlert(t("Document defaults saved"))
     } catch (error) { await showAlert(errorText(error)) }
   }
@@ -253,11 +260,20 @@ export default function Settings({ onNavigate }: { onNavigate?: (key: ModuleKey)
                   <label className={label}>{t('Estimate prefix')}</label>
                   <input aria-label={t('Estimate prefix')} value={estimatePrefix} maxLength={8} onChange={e => setEstimatePrefix(e.target.value.toUpperCase())} className={inputClass} />
                 </div>
+                <div>
+                  <label className={label}>{t('Credit note prefix')}</label>
+                  <input aria-label={t('Credit note prefix')} value={creditNotePrefix} maxLength={8} onChange={e => setCreditNotePrefix(e.target.value.toUpperCase())} className={inputClass} />
+                </div>
               </div>
               <div>
                 <label className={label}>{t('Tax rate')} (%)</label>
                 <NumberInput aria-label={t('Tax rate')} value={taxRate} onChange={setTaxRate} className={inputClass} />
                 {assistant && <span className="mt-1 block text-[11.5px] text-muted">{t(hints.taxRate)}</span>}
+              </div>
+              <div>
+                <label className={label}>{t('Default payment term (days)')}</label>
+                <NumberInput aria-label={t('Default payment term (days)')} value={defaultDueDays} onChange={setDefaultDueDays} className={inputClass} />
+                <span className="mt-1 block text-[11.5px] text-muted">{t('New invoices are due this many days after their issue date (0–365). Estimates expire after the same delay.')}</span>
               </div>
               <p className="text-[12px] text-muted">{t('Numbers are sequential: PREFIX-YEAR-0001. The next number is calculated from the documents you already have.')}</p>
               <p className="text-[12px] text-muted">{t('The tax rate is applied to new invoices and estimates; every document keeps its own rate.')}</p>

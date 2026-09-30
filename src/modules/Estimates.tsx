@@ -3,7 +3,9 @@ import { showAlert, askConfirm } from '../lib/dialogs'
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { useFatorati } from '../store/useFatorati'
 import { money, number as formatNumber, documentTotals, lineTotal, formatDate } from '../lib/format'
-import { nextDocumentNumber } from '../lib/fatorati'
+import { nextDocumentNumber, seriesFloor } from '../lib/fatorati'
+import { canConvertEstimate, invoiceFromEstimate } from '../lib/convert'
+import { clampDueDays } from '../lib/status'
 import { assistantRegion, assistantStartsOpen, assistantVisible, hintsFor, settingsRegion, TAX_REGION_LABEL } from '../lib/taxGuide'
 import { getPreferences } from '../lib/preferences'
 import { shareInvoicePdf } from '../lib/invoice-pdf'
@@ -13,6 +15,7 @@ import TaxAssistantPanel, { ShowTaxAssistantButton } from '../components/TaxAssi
 import NumberInput from '../components/NumberInput'
 import type { Estimate } from '../store/types'
 import TemplateFields, { LineExtras } from '../components/TemplateFields'
+import { productToLine } from '../lib/products'
 import { COLUMN_LABEL, PRESETS, documentTemplate, presetIsTaxExempt, presetLabels, presetRateHint, templateColumns, templateDefaults, type DocumentTemplate } from '../lib/templates'
 import { mandatoryFields } from '../lib/template-render'
 import { takeIntent } from '../lib/navigation-intent'
@@ -25,13 +28,13 @@ const STATUSES: Status[] = ['draft', 'sent', 'accepted', 'declined']
 export default function Estimates() {
   const { t } = useI18n()
   const prefs = usePreferences()
-  const { estimates, invoices, customers, business, settings, addEstimate, updateEstimate, deleteEstimate, addInvoice, updateSettings } = useFatorati()
+  const { estimates, invoices, customers, products, business, settings, addEstimate, updateEstimate, deleteEstimate, addInvoice, updateSettings } = useFatorati()
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Estimate | null>(null)
   const [busy, setBusy] = useState(false)
   const [preview, setPreview] = useState(false)
   const [form, setForm] = useState(() => ({
-    customerId: '', description: '', quantity: 1, unitPrice: 0, notes: '',
+    customerId: '', productId: undefined as string | undefined, description: '', quantity: 1, unitPrice: 0, notes: '',
     unit: '', section: '', discount: undefined as number | undefined,
     paymentMethod: '',
     template: templateDefaults(settings, settingsRegion(settings)) as DocumentTemplate,
@@ -43,7 +46,7 @@ export default function Estimates() {
   const inputClass = 'w-full px-3 py-2 border border-line-strong rounded-lg text-[13.5px] bg-surface text-ink outline-none transition-colors placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-brand/15'
 
   const prefix = settings?.estimatePrefix || 'EST'
-  const nextNumber = useMemo(() => nextDocumentNumber(estimates.map(row => row.number), prefix, 'EST'), [estimates, prefix])
+  const nextNumber = useMemo(() => nextDocumentNumber(estimates.map(row => row.number), prefix, 'EST', new Date(), seriesFloor(settings?.numberFloor, prefix, 'EST')), [estimates, prefix, settings?.numberFloor])
   const exempt = presetIsTaxExempt(form.template)
   const effectiveRate = exempt ? 0 : form.taxRate
   const totals = documentTotals([{ quantity: form.quantity, unitPrice: form.unitPrice, discount: form.discount }], effectiveRate, form.currency)
@@ -66,7 +69,7 @@ export default function Estimates() {
 
   function openCreate() {
     setForm({
-      customerId: '', description: '', quantity: 1, unitPrice: 0, notes: '',
+      customerId: '', productId: undefined, description: '', quantity: 1, unitPrice: 0, notes: '',
       unit: '', section: '', discount: undefined,
       paymentMethod: '',
       template: templateDefaults(settings, region),
@@ -80,6 +83,7 @@ export default function Estimates() {
     const item = estimate.items[0]
     setForm({
       customerId: estimate.customerId,
+      productId: item?.productId,
       description: item?.description || '',
       quantity: item?.quantity ?? 1,
       unitPrice: item?.unitPrice ?? 0,
@@ -103,7 +107,9 @@ export default function Estimates() {
       const rate = presetIsTaxExempt(form.template) ? 0 : form.taxRate
       const recalculated = documentTotals([{ quantity: form.quantity, unitPrice: form.unitPrice, discount: form.discount }], rate, form.currency)
       const item = {
-        id: editing?.items[0]?.id || crypto.randomUUID(), description: form.description.trim(),
+        id: editing?.items[0]?.id || crypto.randomUUID(),
+        ...(form.productId ? { productId: form.productId } : {}),
+        description: form.description.trim(),
         quantity: form.quantity, unitPrice: form.unitPrice,
         ...(form.unit ? { unit: form.unit } : {}),
         ...(form.section ? { section: form.section } : {}),
@@ -120,7 +126,7 @@ export default function Estimates() {
       else await addEstimate({
         ...payload, number: nextNumber, status: 'draft',
         issueDate: new Date().toISOString().slice(0, 10),
-        expiryDate: new Date(Date.now() + 30 * 86400_000).toISOString().slice(0, 10),
+        expiryDate: new Date(Date.now() + clampDueDays(settings?.defaultDueDays) * 86400_000).toISOString().slice(0, 10),
       })
       setShowForm(false); setEditing(null)
     } catch (error) { await showAlert(errorText(error)) } finally { setBusy(false) }
@@ -143,23 +149,20 @@ export default function Estimates() {
     try { await deleteEstimate(estimate.id) } catch (error) { await showAlert(errorText(error)) }
   }
 
-  /** Accepted estimates become a draft invoice with the next sequential number. */
+  /** Sent or accepted estimates become a draft invoice, exactly once. */
   async function convert(estimate: Estimate) {
+    if (!canConvertEstimate(estimate)) { await showAlert(t('Only a sent or accepted estimate can be converted to an invoice.')); return }
     if (!await askConfirm(t('Create a draft invoice from estimate {number}?', { number: estimate.number }))) return
     setBusy(true)
     try {
-      await addInvoice({
-        number: nextDocumentNumber(invoices.map(row => row.number), settings?.invoicePrefix || 'INV', 'INV'),
-        customerId: estimate.customerId,
-        currency: estimate.currency, language: estimate.language, pdfColor: estimate.pdfColor,
-        exchangeRate: estimate.exchangeRate, rateCurrency: estimate.rateCurrency, taxRate: estimate.taxRate,
-        items: estimate.items.map(item => ({ ...item, id: crypto.randomUUID() })),
-        subtotal: estimate.subtotal, tax: estimate.tax, total: estimate.total, status: 'draft',
-        issueDate: new Date().toISOString().slice(0, 10),
-        dueDate: new Date(Date.now() + 30 * 86400_000).toISOString().slice(0, 10),
-        notes: estimate.notes,
-      })
-      await updateEstimate(estimate.id, { status: 'accepted' })
+      const invoicePrefix = settings?.invoicePrefix || 'INV'
+      const number = nextDocumentNumber(invoices.map(row => row.number), invoicePrefix, 'INV', new Date(), seriesFloor(settings?.numberFloor, invoicePrefix, 'INV'))
+      const invoice = await addInvoice(invoiceFromEstimate(
+        estimate, number,
+        new Date().toISOString().slice(0, 10),
+        new Date(Date.now() + clampDueDays(settings?.defaultDueDays) * 86400_000).toISOString().slice(0, 10),
+      ))
+      await updateEstimate(estimate.id, { status: 'accepted', convertedInvoiceId: invoice.id })
       await showAlert(t('Draft invoice created'))
     } catch (error) { await showAlert(errorText(error)) } finally { setBusy(false) }
   }
@@ -212,6 +215,20 @@ export default function Estimates() {
           <span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t('Customer')}</span>
           <select aria-label={t('Customer')} value={form.customerId} onChange={e => setForm({ ...form, customerId: e.target.value })} className={inputClass}><option value="">{t('Select customer')}</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
         </label>
+        {products.length > 0 && (
+          <label className="block">
+            <span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t('Use a product')}</span>
+            <select aria-label={t('Use a product')} value={form.productId || ''} onChange={e => {
+              const product = products.find(candidate => candidate.id === e.target.value)
+              if (!product) { setForm({ ...form, productId: undefined }); return }
+              const line = productToLine(product)
+              setForm({ ...form, productId: line.productId, description: line.description, unitPrice: line.unitPrice, unit: line.unit || '' })
+            }} className={inputClass}>
+              <option value="">—</option>
+              {products.map(product => <option key={product.id} value={product.id}>{product.name}{product.sku ? ` (${product.sku})` : ''}</option>)}
+            </select>
+          </label>
+        )}
         <label className="block">
           <span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t('Description')}</span>
           <input aria-label={t('Description')} placeholder={t('Description')} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className={inputClass} />
@@ -299,7 +316,9 @@ export default function Estimates() {
               <select aria-label={`${t('Status')} ${estimate.number}`} value={estimate.status} onChange={e => void changeStatus(estimate, e.target.value as Status)} className="text-[12px] rounded-lg border border-line-strong bg-surface text-ink px-2 py-1">
                 {STATUSES.map(status => <option key={status} value={status}>{t(status)}</option>)}
               </select>
-              <button disabled={busy} onClick={() => void convert(estimate)} title={t('Convert to invoice')} aria-label={`${t('Convert to invoice')} ${estimate.number}`} className="p-2 hover:bg-canvas rounded-lg"><FilePlus2 className="w-4 h-4 text-muted" /></button>
+              {estimate.convertedInvoiceId
+                ? <span className="text-[12px] text-muted px-2 py-1">{t('Converted to {number}', { number: invoices.find(inv => inv.id === estimate.convertedInvoiceId)?.number || t('Unknown') })}</span>
+                : <button disabled={busy || !canConvertEstimate(estimate)} onClick={() => void convert(estimate)} title={t('Convert to invoice')} aria-label={`${t('Convert to invoice')} ${estimate.number}`} className="p-2 hover:bg-canvas rounded-lg disabled:opacity-40"><FilePlus2 className="w-4 h-4 text-muted" /></button>}
               <button disabled={busy} onClick={() => openEdit(estimate)} title={t('Edit')} aria-label={`${t('Edit')} ${estimate.number}`} className="p-2 hover:bg-canvas rounded-lg"><Pencil className="w-4 h-4 text-muted" /></button>
               <button disabled={busy} onClick={() => void share(estimate)} title={t('Share PDF')} aria-label={`${t('Share PDF')} ${estimate.number}`} className="p-2 hover:bg-canvas rounded-lg"><Share2 className="w-4 h-4 text-muted" /></button>
               <button onClick={() => void remove(estimate)} className="text-[12px] text-serious px-2 py-1">{t('Delete')}</button>

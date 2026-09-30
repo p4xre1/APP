@@ -198,6 +198,29 @@ test('an empty mandatory field keeps its label and warns instead of disappearing
   assert.ok(exemptModel.missing.includes(t('Client ICE', {}, 'fr')))
 })
 
+test('an individual customer needs no ICE: no warning, and the row only prints when a number exists', () => {
+  const template = normalizeTemplate({ layoutId: 'classic', presetId: 'general', region: 'MA' }, 'MA')
+  const document = invoice()
+  const modelOf = (customer: Customer) => buildDocumentModel({
+    kind: 'invoice', document, business: completeBusiness(), customer, region: 'MA', currency: 'MAD', language: 'fr',
+    template, appAccent: '#2563eb',
+  })
+  // Individual without a number: no Client ICE row, and above all no warning.
+  const individual = modelOf({ ...completeCustomer(), kind: 'individual', taxNumber: '' } as Customer)
+  assert.equal(individual.missing.includes(t('Client ICE', {}, 'fr')), false)
+  assert.deepEqual(individual.customerIds, [])
+  // Individual that still has a number: printed, still not demanded.
+  const numbered = modelOf({ ...completeCustomer(), kind: 'individual' } as Customer)
+  assert.deepEqual(numbered.customerIds, [{ label: t('Client ICE', {}, 'fr'), value: '987654321098765' }])
+  assert.equal(numbered.missing.includes(t('Client ICE', {}, 'fr')), false)
+  // Explicit business and legacy records without a kind behave identically: ICE demanded.
+  for (const kind of ['business', undefined] as const) {
+    const business = modelOf({ ...completeCustomer(), kind, taxNumber: '' } as Customer)
+    assert.ok(business.missing.includes(t('Client ICE', {}, 'fr')))
+    assert.deepEqual(business.customerIds, [{ label: t('Client ICE', {}, 'fr'), value: null }])
+  }
+})
+
 test('the region is part of the snapshot: a US document never gains Moroccan identifiers', () => {
   const template = normalizeTemplate({ layoutId: 'modern', presetId: 'freelancer', region: 'US', accent: 'green' }, 'US')
   const model = build(template, { region: 'US', language: 'en' })

@@ -237,6 +237,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                 )}
               </button>
               <p className="text-[12px] text-muted text-center mt-3">{t("No account required • Your data stays on device")}</p>
+              <p className="text-[12px] text-muted text-center mt-2">{t('By continuing you accept the terms of use and acknowledge the privacy policy:')}</p>
               <div className="mt-1 flex flex-wrap items-center justify-center gap-x-4">
                 <button type="button" onClick={() => setLegal('privacy')} className="min-h-12 text-[12px] font-medium text-muted underline underline-offset-2 transition-colors hover:text-ink">{t('Privacy policy')}</button>
                 <button type="button" onClick={() => setLegal('terms')} className="min-h-12 text-[12px] font-medium text-muted underline underline-offset-2 transition-colors hover:text-ink">{t('Terms of use')}</button>

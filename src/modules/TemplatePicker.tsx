@@ -6,7 +6,7 @@ import { useFatorati } from '../store/useFatorati'
 import { settingsRegion } from '../lib/taxGuide'
 import { getPreferences } from '../lib/preferences'
 import {
-  buildSampleModel, layoutDocument, paintPage, PAGE_HEIGHT, PAGE_WIDTH, type Measure, type PaintContext,
+  buildSampleModel, layoutDocument, paintPage, PAGE_HEIGHT, PAGE_WIDTH, type DocumentModel, type Measure, type PaintContext,
 } from '../lib/template-render'
 import { SAMPLE_PAYMENT_METHOD } from '../lib/invoice-pdf'
 import {
@@ -35,10 +35,12 @@ export interface TemplatePickerProps {
 }
 
 /** Live preview: the same model, the same layout engine and the same painter as the PDF. */
-function LivePreview({ template, region, language, currency, logo, stamp, appAccent, label }: {
-  template: DocumentTemplate; region: TaxRegion; language: Language
-  currency: string; logo?: string; stamp?: string; appAccent: string; label: string
-}) {
+/**
+ * Paints ANY document model onto a canvas: the same model builder, the same
+ * layout engine and the same painter as the PDF. Used by the template gallery
+ * (sample data) and by the invoice builder (the real form state).
+ */
+export function ModelPreview({ model, label }: { model: DocumentModel; label: string }) {
   const ref = useRef<HTMLCanvasElement | null>(null)
 
   useEffect(() => {
@@ -46,12 +48,9 @@ function LivePreview({ template, region, language, currency, logo, stamp, appAcc
     if (!canvas) return
     let cancelled = false
     const paint = async () => {
-      const family = language === 'ar' ? 'Tajawal' : 'Inter'
+      const family = model.language === 'ar' ? 'Tajawal' : 'Inter'
       // The bundled font must be resident before anything is measured or drawn.
       try { await document.fonts.load(`28px ${family}`) } catch { /* Falls back to the default face. */ }
-      const model = buildSampleModel(template, language, currency, region, appAccent, SAMPLE_PAYMENT_METHOD)
-      model.logo = template.showLogo !== false ? logo : undefined
-      model.stamp = template.showStamp === true ? stamp : undefined
       const scratch = document.createElement('canvas')
       const context = scratch.getContext('2d')
       if (!context) return
@@ -92,9 +91,23 @@ function LivePreview({ template, region, language, currency, logo, stamp, appAcc
     }
     void paint()
     return () => { cancelled = true }
-  }, [template, region, language, currency, logo, stamp, appAccent])
+  }, [model])
 
   return <canvas ref={ref} role="img" aria-label={label} className="w-full rounded-xl border border-line bg-white" />
+}
+
+/** Sample-data preview of a template, for the gallery. */
+function LivePreview({ template, region, language, currency, logo, stamp, appAccent, label }: {
+  template: DocumentTemplate; region: TaxRegion; language: Language
+  currency: string; logo?: string; stamp?: string; appAccent: string; label: string
+}) {
+  const model = useMemo(() => {
+    const built = buildSampleModel(template, language, currency, region, appAccent, SAMPLE_PAYMENT_METHOD)
+    built.logo = template.showLogo !== false ? logo : undefined
+    built.stamp = template.showStamp === true ? stamp : undefined
+    return built
+  }, [template, region, language, currency, logo, stamp, appAccent])
+  return <ModelPreview model={model} label={label} />
 }
 
 /**

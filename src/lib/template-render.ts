@@ -55,7 +55,7 @@ export interface PaintContext {
 }
 
 export interface ModelInput {
-  kind: 'invoice' | 'estimate'
+  kind: 'invoice' | 'estimate' | 'credit_note'
   document: Invoice | Estimate
   business?: Business | null
   customer?: Customer | null
@@ -70,7 +70,7 @@ export interface TableRow { section?: string; cells: string[] }
 export interface Labelled { label: string; value: string | null }
 
 export interface DocumentModel {
-  kind: 'invoice' | 'estimate'
+  kind: 'invoice' | 'estimate' | 'credit_note'
   title: string
   number: string
   language: Language
@@ -156,7 +156,16 @@ export function buildDocumentModel(input: ModelInput): DocumentModel {
     { label: tr(isEstimate ? 'Expiry date' : 'Due date'), value: formatDate(estimate ? estimate.expiryDate : invoice!.dueDate, false, language) },
     { label: tr('Status'), value: tr(doc.status) },
     { label: tr('Payment method'), value: paymentMethod ? tr(paymentMethod) : '—' },
+    // Builder extras: printed only when present so older documents look unchanged.
+    ...(invoice?.poNumber?.trim() ? [{ label: tr('Purchase order #'), value: invoice.poNumber.trim() }] : []),
+    ...(invoice?.salesperson?.trim() ? [{ label: tr('Salesperson'), value: invoice.salesperson.trim() }] : []),
   ]
+
+  // Optional ship-to block: appended to the customer block so every layout
+  // renders it without layout-specific code. `privateNotes` is deliberately
+  // never read here - it must not exist anywhere in the rendered model.
+  const shipping = (invoice?.shippingAddress || '').trim()
+  if (shipping) customerLines.push(`${tr('Ship to')}:`, ...shipping.split('\n').map(line => line.trim()).filter(Boolean))
 
   const columns = templateColumns(template).map(column => ({
     id: column, label: tr(columnLabelKey(template, column)), align: columnAlign(column),
@@ -176,7 +185,7 @@ export function buildDocumentModel(input: ModelInput): DocumentModel {
   totals.push({ label: tr('Total incl. tax'), value: money(doc.total, currency, false, language), emphasis: true })
 
   return {
-    kind, title: tr(isEstimate ? 'Estimate' : 'Invoice'), number: doc.number,
+    kind, title: tr(isEstimate ? 'Estimate' : kind === 'credit_note' ? 'Credit note' : 'Invoice'), number: doc.number,
     language, rtl: language === 'ar', currency, region, template, layout: layoutOf(template), preset, accent,
     accentInk: accentText(accent), appName: tr('Fatorati'),
     logo: template.showLogo === true ? business?.logo : undefined,
@@ -202,7 +211,9 @@ export function sectionLabel(item: InvoiceItem, language: Language): string | un
 
 function lineCell(column: ColumnId, item: InvoiceItem, currency: string, language: Language): string {
   switch (column) {
-    case 'description': return item.description
+    // The item code (product SKU) prefixes the description: no extra column,
+    // so every existing preset's column set keeps working unchanged.
+    case 'description': return item.itemCode?.trim() ? `${item.itemCode.trim()} — ${item.description}` : item.description
     case 'unit': return (item.unit || '').trim()
     case 'quantity': return formatNumber(item.quantity, language)
     case 'unitPrice': return money(item.unitPrice, currency, false, language)
@@ -253,9 +264,17 @@ export function mandatoryFields(input: {
   }
   const customerIds: Labelled[] = []
   if (input.region === 'MA') {
+    // ICE identifies companies. A private individual has none, so the row and the
+    // "missing" warning apply to business customers only (no kind = business,
+    // which is what every record saved before the field existed means).
+    const individual = input.customer?.kind === 'individual'
     const ice = (input.customer?.taxNumber || '').trim() || null
-    if (!ice) missing.push(tr('Client ICE'))
-    customerIds.push({ label: tr('Client ICE'), value: ice })
+    if (!individual) {
+      if (!ice) missing.push(tr('Client ICE'))
+      customerIds.push({ label: tr('Client ICE'), value: ice })
+    } else if (ice) {
+      customerIds.push({ label: tr('Client ICE'), value: ice })
+    }
   }
   if (!(input.business?.address || '').trim() && !(input.business?.city || '').trim()) missing.push(tr('Address'))
   if (!(input.paymentMethod || '').trim()) missing.push(tr('Payment method'))

@@ -7,6 +7,8 @@
 
 import { create } from 'zustand'
 import { getPreferences } from '../lib/preferences'
+import { raisedFloor } from '../lib/fatorati'
+import { lockedFieldChanged } from '../lib/credit-notes'
 import { DEFAULT_TAX_REGION } from '../lib/taxGuide'
 import { reminderSettings, syncReminders } from '../lib/notifications'
 import { sessionGuard, unlockedSnapshot } from '../lib/vault'
@@ -88,6 +90,9 @@ interface FatoratiState {
 
   /** Rebuilds every pending local notification (notes and subscriptions) from the current data. */
   resyncReminders: () => Promise<{ scheduled: number; cancelled: number; permission: string }>
+
+  /** Raises the per-series number floor after a document number is used. */
+  raiseNumberFloor: (documentNumber: string) => Promise<void>
 
   // Settings
   loadSettings: () => Promise<void>
@@ -261,17 +266,31 @@ export const useFatorati = create<FatoratiState>((set, get) => ({
   addInvoice: async (invoiceData) => {
     const invoice = await db.add<Invoice>('invoices', invoiceData)
     set((s) => ({ invoices: [invoice, ...s.invoices] }))
+    // Every used number raises its series floor, so deleting the document later
+    // can never bring the number back. A failed floor write is retried on the
+    // next save; the next number is derived from stored documents too.
+    await get().raiseNumberFloor(invoice.number).catch(() => undefined)
     return invoice
   },
 
   updateInvoice: async (id, patch) => {
+    // Issued documents are history: the fields the document said (amounts,
+    // customer, dates, numbering) are locked; corrections are credit notes.
+    const current = get().invoices.find((inv) => inv.id === id)
+    if (current && lockedFieldChanged(current, patch)) {
+      throw new Error('An issued document is locked: amounts, customer, issue date and numbering cannot change. Create a credit note to correct it.')
+    }
     const updated = await db.update<Invoice>('invoices', id, patch)
     set((s) => ({
       invoices: s.invoices.map((inv) => (inv.id === id ? updated : inv)),
     }))
+    if (typeof patch.number === 'string') await get().raiseNumberFloor(patch.number).catch(() => undefined)
   },
 
   deleteInvoice: async (id) => {
+    // Only drafts may go: an issued invoice must stay in the gap-free series.
+    const target = get().invoices.find((inv) => inv.id === id)
+    if (target && target.status !== 'draft') throw new Error('Only a draft invoice can be deleted. An issued invoice must stay in the sequence; change its status instead.')
     await db.remove('invoices', id)
     set((s) => ({ invoices: s.invoices.filter((inv) => inv.id !== id) }))
   },
@@ -284,6 +303,8 @@ export const useFatorati = create<FatoratiState>((set, get) => ({
   addEstimate: async (estimateData) => {
     const estimate = await db.add<Estimate>('estimates', estimateData)
     set((s) => ({ estimates: [estimate, ...s.estimates] }))
+    // Estimates can still be deleted, but their numbers are never reused either.
+    await get().raiseNumberFloor(estimate.number).catch(() => undefined)
     return estimate
   },
 
@@ -292,6 +313,7 @@ export const useFatorati = create<FatoratiState>((set, get) => ({
     set((s) => ({
       estimates: s.estimates.map((est) => (est.id === id ? updated : est)),
     }))
+    if (typeof patch.number === 'string') await get().raiseNumberFloor(patch.number).catch(() => undefined)
   },
 
   deleteEstimate: async (id) => {
@@ -401,6 +423,15 @@ export const useFatorati = create<FatoratiState>((set, get) => ({
     } catch {
       return { scheduled: 0, cancelled: 0, permission: 'unsupported' }
     }
+  },
+
+  raiseNumberFloor: async (documentNumber) => {
+    const { settings } = get()
+    if (!settings) return
+    const numberFloor = raisedFloor(settings.numberFloor, documentNumber)
+    if (!numberFloor) return
+    const updated = await db.update<Settings>('settings', settings.id, { numberFloor })
+    set({ settings: updated })
   },
 
   loadSettings: async () => {

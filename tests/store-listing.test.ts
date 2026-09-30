@@ -3,11 +3,11 @@ import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
 import { TAX_REGIONS, TAX_REGION_LABEL } from '../src/lib/taxGuide'
 
-const listing = (language: 'en' | 'fr' | 'ar') => readFileSync(`store/listing.${language}.md`, 'utf8')
+const listing = (language: 'en' | 'fr' | 'ar' | 'es' | 'pt') => readFileSync(`store/listing.${language}.md`, 'utf8')
 const blocks = (text: string) => [...text.matchAll(/## [^\n]+\n\n```\n([\s\S]*?)```/g)].map(match => match[1].trim())
 
 const LIMITS = { title: 30, short: 80, full: 4000, whatsnew: 500 }
-const languages = ['en', 'fr', 'ar'] as const
+const languages = ['en', 'fr', 'ar', 'es', 'pt'] as const
 
 test('every listing stays inside the Play character limits', () => {
   for (const language of languages) {
@@ -26,6 +26,8 @@ test('the copy only makes claims the app can back up', () => {
     en: ['No account', 'no ads', 'works entirely on your phone', 'cannot send anything anywhere', 'not tax advice'],
     fr: ['sans compte', 'aucune publicité', 'il ne peut donc rien envoyer nulle part', "non d'un conseil fiscal"],
     ar: ['بلا حساب', 'بلا إعلانات', 'لا يستطيع إرسال أي شيء إلى أي جهة', 'نصيحة ضريبية'],
+    es: ['Sin cuenta', 'sin anuncios', 'funciona por completo en tu teléfono', 'no puede enviar nada a ninguna parte', 'no es asesoramiento fiscal'],
+    pt: ['Sem conta', 'sem anúncios', 'funciona inteiramente no seu telemóvel', 'não consegue enviar nada para lado nenhum', 'não é aconselhamento fiscal'],
   }
   for (const language of languages) {
     const text = listing(language)
@@ -41,10 +43,10 @@ test('the copy only makes claims the app can back up', () => {
 })
 
 test('no listing claims compliance, certification, approval or a guarantee', () => {
-  const negations = ['not', "n'est", 'ni ', 'no ', 'never', 'pas ', 'aucun', 'غير', 'لا ', 'بلا', 'ليس']
+  const negations = ['not', "n'est", 'ni ', 'no ', 'never', 'pas ', 'aucun', 'غير', 'لا ', 'بلا', 'ليس', 'sin ', 'sem ', 'não', 'nem ']
   for (const language of languages) {
     const text = listing(language)
-    for (const word of ['DGI compliant', 'compliant', 'certified', 'certifié', 'approved', 'approuvé', 'guarantee', 'garanti', 'معتمد', 'مصادق', 'معتمدة']) {
+    for (const word of ['DGI compliant', 'compliant', 'certified', 'certifié', 'certificad', 'approved', 'approuvé', 'aprobad', 'aprovad', 'guarantee', 'garanti', 'معتمد', 'مصادق', 'معتمدة']) {
       let index = text.toLowerCase().indexOf(word.toLowerCase())
       while (index !== -1) {
         const window = text.slice(Math.max(0, index - 80), index + word.length + 80).toLowerCase()
@@ -65,7 +67,7 @@ test('the assets checklist names the required sizes and never ships a fake scree
   // No image was generated for the listing: the folder holds text only.
   const files = readdirSync('store')
   assert.deepEqual(files.filter(file => /\.(png|jpe?g|webp)$/i.test(file)), [])
-  assert.deepEqual(files.sort(), ['ASSETS-TODO.md', 'listing.ar.md', 'listing.en.md', 'listing.fr.md'])
+  assert.deepEqual(files.sort(), ['ASSETS-TODO.md', 'listing.ar.md', 'listing.en.md', 'listing.es.md', 'listing.fr.md', 'listing.pt.md'])
 })
 
 test('the console answer sheet covers every declaration Play asks for', () => {
@@ -96,9 +98,11 @@ test('the listings claim exactly the tax regions the code ships', () => {
     en: ['Morocco', 'United States'],
     fr: ['Maroc', 'États-Unis'],
     ar: ['المغرب', 'الولايات المتحدة'],
+    es: ['Marruecos', 'Estados Unidos'],
+    pt: ['Marrocos', 'Estados Unidos'],
   } as const
   const notShipped = ['France', 'French', 'Spain', 'Spanish', 'Portugal', 'Portuguese', 'Espagne', 'espagnol', 'espagnole', 'البرتغال', 'البرتغالية', 'إسبانيا', 'الإسبانية', 'فرنسا', 'الفرنسية']
-  const taxLine = /tax guide|tax assistant|guide fiscal|fiscaux|fiscales|ضريب/i
+  const taxLine = /tax guide|tax assistant|tax information|tax summary|fiscal|impuestos|impostos|ضريب/i
   for (const language of languages) {
     const lines = listing(language).split('\n').filter(line => taxLine.test(line))
     assert.ok(lines.length >= 2, `${language} must describe the tax guide and list it in "What's new"`)

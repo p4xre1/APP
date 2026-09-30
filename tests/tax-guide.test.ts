@@ -62,27 +62,70 @@ test('Morocco content covers the rates, Art. 145 content, auto-entrepreneur and 
   const rates = body('rates')
   assert.match(rates, /20%/)
   assert.match(rates, /10%/)
+  // 10% is not "everything that is not 20%": it applies only to listed operations.
+  assert.match(rates, /only for the operations the CGI lists/)
+  // Exemption / out-of-scope is a legal status, never presented as a rate choice.
+  assert.match(rates, /legal situation, not a 0% rate/)
   assert.match(rates, /7% and 14%/)
   assert.match(rates, /1 January 2026/)
   assert.match(rates, /exports/i)
+  assert.match(rates, /right to deduct/)
 
   const content = body('content')
   assert.match(content, /Art\. 145/)
   for (const mention of ['ICE (15 digits)', 'IF', 'TP', 'RC', 'sequential', 'unit price', 'Payment method']) assert.ok(content.includes(mention), `invoice content mentions ${mention}`)
 
   const auto = body('auto-entrepreneur')
+  // Two ceilings, not one: 200,000 DH for services, 500,000 DH for the rest.
+  assert.match(auto, /200,000 DH for services/)
   assert.match(auto, /500,000 DH/)
+  assert.match(auto, /1% for services, 0\.5%/)
+  // The single-client rule is settled law (finance law 2023, Art. 73 CGI): a 30%
+  // withholding at source on the excess, for services - never an invoicing cap.
+  assert.match(auto, /80,000 DH/)
+  assert.match(auto, /30% withholding at source/)
+  assert.match(auto, /2023 finance law/)
+  assert.match(auto, /not a cap/)
+  assert.equal(auto.includes('under parliamentary discussion'), false, 'the outdated caption must be gone')
+  // Out of scope of TVA, with the mention - not a 0% rate line.
+  assert.match(auto, /outside the scope of TVA/)
   assert.match(auto, /TVA non applicable/)
   assert.match(auto, /CNIE/)
 
+  const deadlines = body('payment-deadlines')
+  assert.match(deadlines, /Law 69-21/)
+  // Scoped, never "every Moroccan invoice must be paid within 60 days":
+  // B2B only, 60 default / 120 by contract / 180 sector derogation, above 2M DH.
+  assert.match(deadlines, /Between businesses/)
+  assert.match(deadlines, /60 days/)
+  assert.match(deadlines, /120 days/)
+  assert.match(deadlines, /180 days/)
+  assert.match(deadlines, /consumers are outside/)
+  assert.match(deadlines, /end of the month/)
+  assert.match(deadlines, /Treasury/)
+  assert.match(deadlines, /Bank Al-Maghrib/)
+  assert.match(deadlines, /2 million DH/)
+
+  const records = body('records')
+  assert.match(records, /10 years/)
+  assert.match(records, /15 days/)
+  assert.match(records, /30 days in case of force majeure/)
+  assert.match(records, /keep your backups/)
+
   // E-invoicing must not present a timeline as fact: principle only, then the DGI.
+  // Announced rollout is separated from binding law (decree unpublished at review).
   const eInvoicing = body('e-invoicing')
   assert.match(eInvoicing, /145-IX/)
   assert.match(eInvoicing, /DGI/)
   assert.match(eInvoicing, /structured data/)
+  assert.match(eInvoicing, /announced/)
+  assert.match(eInvoicing, /unpublished/)
   assert.equal(/\b(?:19|20)\d{2}\b/.test(eInvoicing), false, 'the e-invoicing note must not state a year')
   assert.equal(/\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d/i.test(eInvoicing), false, 'no dated start')
   assert.match(eInvoicing, /no date/)
+  // Fatorati is offline: it must never claim to satisfy an electronic
+  // submission or prior-validation requirement by itself.
+  assert.match(eInvoicing, /may not satisfy/)
 
   const tips = body('tips')
   assert.match(tips, /ICE or IF/)
@@ -94,12 +137,33 @@ test('United States content explains that sales tax is state and local, not fede
   const body = guideFor('US').sections.map(section => [section.title, ...section.bullets].map(text).join(' ')).join(' ')
   assert.match(body, /no federal sales tax/i)
   assert.match(body, /city/i)
-  assert.match(body, /combined rate/i)
   assert.match(body, /nexus/i)
   assert.match(body, /resale or exemption certificate/i)
   assert.match(body, /EIN/)
+  // No universal sourcing claim: the old "rate follows the ship-to address"
+  // wording is gone, replaced by state-dependent destination/origin/mixed rules.
+  assert.equal(body.includes("follows the buyer's ship-to address"), false, 'no universal ship-to sourcing claim')
+  assert.match(body, /destination, origin or mixed/)
+  assert.match(body, /never decides the rate for you/)
+  // OBBBA thresholds: $2,000 for 1099-NEC/MISC after 31 Dec 2025, 1099-K back at $20,000/200.
   assert.match(body, /1099-NEC/)
-  assert.match(body, /three to seven years/)
+  assert.match(body, /2,000 USD/)
+  assert.match(body, /31 December 2025/)
+  assert.match(body, /1099-K/)
+  assert.match(body, /20,000 USD and 200 transactions/)
+  assert.equal(body.includes('600 USD'), false, 'the pre-2026 600 USD threshold must be gone')
+  // Other 1099 categories keep their own thresholds - never one blanket number.
+  assert.match(body, /royalties and payments to attorneys/)
+  // A platform may report below the federal 1099-K line; states can go lower.
+  assert.match(body, /below that/)
+  // Reporting thresholds never decide taxability; sales tax is not income tax.
+  assert.match(body, /not whether the income is taxable/)
+  assert.match(body, /never an income-tax or self-employment-tax calculator/)
+  // Record keeping: no single national rule, state and federal are distinct.
+  assert.equal(body.includes('three to seven years'), false, 'the old universal 3-7 claim must be gone')
+  assert.match(body, /each state sets its own retention period/)
+  assert.match(body, /three to five years/)
+  assert.match(body, /usually three years/)
 })
 
 test('the assistant region follows Settings until it is switched inside the assistant', () => {

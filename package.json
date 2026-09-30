@@ -1,7 +1,7 @@
 {
   "name": "fatorati-offline",
   "private": true,
-  "version": "2.1.0",
+  "version": "2.2.0",
   "type": "module",
   "packageManager": "pnpm@10.34.3",
   "engines": {

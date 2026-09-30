@@ -59,14 +59,22 @@ test('status workflow drives revenue, counts and charts', () => {
     { ...base, id: 'b', number: 'INV-2', customerId: 'c', items: [], status: 'sent', issueDate: '2026-01-01', dueDate: '2026-01-31', notes: '' },
     { ...base, id: 'c', number: 'INV-3', customerId: 'c', items: [], status: 'overdue', issueDate: '2026-01-01', dueDate: '2026-01-31', notes: '' },
   ] as unknown as Invoice[]
-  const result = reportTotals(invoices, [], 'USD')
+  // Updated with the 2.2.0 accounting fix: the old expectations (revenue 12,
+  // tax 6, pending 12) counted tax inside revenue, summed tax across drafts and
+  // unsent invoices, and hid overdue money from pending. Correct figures:
+  // revenue = paid total minus its tax, tax = paid tax only, pending = the full
+  // amount still owed (sent + overdue, incl. tax).
+  // Pinned "today" before the due date, so the sent invoice is not overdue yet.
+  const result = reportTotals(invoices, [], 'USD', '2026-01-15')
   const usd = result.totals.find(row => row.currency === 'USD')!
-  assert.equal(usd.revenue, 12)
-  assert.equal(usd.pending, 12)
-  assert.equal(usd.tax, 6)
+  assert.equal(usd.revenue, 10)
+  assert.equal(usd.tax, 2)
+  assert.equal(usd.received, 12)
+  assert.equal(usd.pending, 24)
+  assert.equal(usd.overdue, 12)
   assert.deepEqual(usd.counts, { paid: 1, sent: 1, overdue: 1, draft: 0, total: 3 })
   const charts = chartData(invoices, [], 'USD', 12, Date.UTC(2026, 0, 15), 'UTC', 'en-US')
-  assert.equal(charts.revenue.reduce((a, b) => a + b, 0), 12) // only the paid invoice
+  assert.equal(charts.revenue.reduce((a, b) => a + b, 0), 10) // only the paid invoice, tax-free
 })
 
 test('editing a record keeps the session cache correct without a full reload', async () => {

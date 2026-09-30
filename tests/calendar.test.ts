@@ -112,6 +112,19 @@ test('notes and tasks appear on their date with their own icon kind', () => {
   assert.ok(items.every(item => item.id !== 'undated'))
 })
 
+test('an archived note leaves the calendar while a done task keeps its day', () => {
+  const sources = {
+    ...empty,
+    notes: [
+      note({ id: 'archived', date: '2026-10-05', archived: true }),
+      note({ id: 'done', type: 'task', done: true, date: '2026-10-05' }),
+    ],
+  }
+  const items = collectCalendarItems(sources, on('2026-10-01'))
+  assert.deepEqual(items.map(item => item.id), ['done'])
+  assert.equal(items[0].done, true, 'a finished task is drawn as finished, not hidden')
+})
+
 test('only unpaid invoices are listed and the late ones are marked overdue', () => {
   const sources = {
     ...empty,
@@ -223,6 +236,30 @@ test('the dashboard window covers today plus seven days, and nothing else', () =
   assert.deepEqual(upcomingItems(sources, { ...on('2026-10-09'), days: 7 }).map(item => item.id), ['late'])
   // The window crosses a month end without losing a day.
   assert.deepEqual(upcomingItems({ ...empty, notes: [note({ id: 'november', date: '2026-11-01' })] }, { ...on('2026-10-28'), days: 7 }).map(item => item.id), ['november'])
+})
+
+test('a notebook with thousands of entries stays fast and only the visible month is drawn', () => {
+  // 4 000 dated notes spread over three years, plus invoices, renewals and estimates.
+  const notes = Array.from({ length: 4_000 }, (_, index) => {
+    const month = (index % 36) + 1
+    const year = 2025 + Math.floor(month / 13)
+    const day = (index % 28) + 1
+    return note({ id: `n${index}`, date: `${year}-${String(month % 12 + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}` })
+  })
+  const sources = { notes, invoices: [invoice()], subscriptions: [subscription()], estimates: [estimate()] }
+  const items = collectCalendarItems(sources, on('2026-10-01'))
+  assert.equal(items.length, notes.length + 3)
+  const range = gridRange(2026, 10, 1)
+  const start = performance.now()
+  const visible = itemsInRange(items, range.from, range.to)
+  const counts = dayCounts(visible)
+  const elapsed = performance.now() - start
+  // The visible month is a small slice of the three years, and every item in it is
+  // inside the window: the screen never walks the whole notebook.
+  assert.ok(visible.length > 0 && visible.length < 400, `${visible.length} items in one month`)
+  assert.ok([...visible].every(item => item.date >= range.from && item.date <= range.to))
+  assert.ok([...counts.values()].reduce((total, count) => total + count, 0) === visible.length)
+  assert.ok(elapsed < 1_500, `filtering ${items.length} items took ${Math.round(elapsed)} ms`)
 })
 
 test('items are ordered by day and then by time, and the sort is stable', () => {

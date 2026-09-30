@@ -7,7 +7,7 @@ import { useFatorati } from '../store/useFatorati'
 import { formatDate, locale } from '../lib/format'
 import { moduleForGroup, setIntent } from '../lib/navigation-intent'
 import {
-  CALENDAR_GROUPS, DEFAULT_FILTERS, collectCalendarItems, dayCounts, daySummary, gridRange, groupByDate, itemsInRange, itemsOn,
+  CALENDAR_GROUPS, DEFAULT_FILTERS, collectCalendarItems, dayCounts, gridRange, itemsInRange, itemsOn,
   monthGrid, shiftMonth, weekdayLabels, type CalendarGroup, type CalendarItem,
 } from '../lib/calendar'
 import { reminderSettings } from '../lib/notifications'
@@ -35,7 +35,6 @@ export default function Calendar({ onNavigate }: { onNavigate?: (key: ModuleKey)
   const items = useMemo(() => collectCalendarItems({ notes, invoices, subscriptions, estimates }, { today, warn: reminderSettings(settings).warn }), [notes, invoices, subscriptions, estimates, today, settings])
   // Only the visible window is computed, so a large notebook stays responsive.
   const visible = useMemo(() => itemsInRange(items, range.from, range.to, groups), [items, range, groups])
-  const byDate = useMemo(() => groupByDate(visible), [visible])
   const counts = useMemo(() => dayCounts(visible), [visible])
   const selectedItems = useMemo(() => itemsOn(itemsInRange(items, selected, selected, groups), selected), [items, selected, groups])
   const columns = useMemo(() => weekdayLabels(locale(language), firstDay), [language, firstDay])
@@ -45,9 +44,11 @@ export default function Calendar({ onNavigate }: { onNavigate?: (key: ModuleKey)
     setCursor(current => shiftMonth(current.year, current.month, delta))
   }
 
+  /** Opening a row leaves its id for the module that owns the record, then navigates. */
   function open(item: CalendarItem) {
-    setIntent(item.group === 'notes' ? 'notebook' : item.group === 'invoices' ? 'invoices' : item.group === 'estimates' ? 'estimates' : 'subscriptions', item.id)
-    onNavigate?.(moduleForGroup(item.group))
+    const target = moduleForGroup(item.group)
+    setIntent(target === 'notebook' ? 'notebook' : target === 'invoices' ? 'invoices' : target === 'estimates' ? 'estimates' : 'subscriptions', item.id)
+    onNavigate?.(target)
   }
 
   async function addOn(date: string) {
@@ -121,4 +122,3 @@ export default function Calendar({ onNavigate }: { onNavigate?: (key: ModuleKey)
   </div>
 }
 
-export { GROUP_LABEL }

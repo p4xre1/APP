@@ -32,7 +32,7 @@ export function takeIntent(module: IntentModule): string | null {
   return id
 }
 
-/** The module that owns a calendar item's kind. */
+/** The module that owns a calendar item's kind, and the intent channel it reads. */
 export function moduleForGroup(group: string): ModuleKey {
   if (group === 'notes') return 'notebook'
   if (group === 'invoices') return 'invoices'

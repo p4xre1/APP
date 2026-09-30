@@ -126,8 +126,9 @@ export function weekdayLabels(locale: string, firstDay: 0 | 1 | 6 = 1): string[]
 /**
  * Every dated item of the four sources, as one flat list.
  *
- * - notes and tasks with a date (an undated note has no place on a calendar; done
- *   and archived notes keep their day but are drawn as finished),
+ * - notes and tasks with a date (an undated note has no place on a calendar; an
+ *   archived note is set aside and stays out, a done task keeps its day and is drawn
+ *   as finished),
  * - invoices that are not paid yet, marked as overdue once their due date is behind us,
  * - subscriptions that are neither cancelled nor expired, on their next renewal or end date,
  * - estimates that are still pending (draft or sent), on their expiry date.
@@ -145,7 +146,9 @@ export function collectCalendarItems(sources: CalendarSources, options: Calendar
   const items: CalendarItem[] = []
 
   for (const note of sources.notes) {
-    if (!isDated(note)) continue
+    // An archived note is put away: it keeps its text but leaves the calendar, exactly
+    // like it loses its reminder.
+    if (!isDated(note) || note.archived === true) continue
     const time = noteTime(note)
     items.push({
       // The kind keeps the note's own type, so an idea and a plain note never end up

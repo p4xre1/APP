@@ -2,7 +2,7 @@ import { beforeEach, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { IDBFactory, IDBObjectStore } from 'fake-indexeddb'
 import { exportBackup, importBackup, loadBackupFile } from '../src/lib/db'
-import { STORES, validateBackup, encodeBackup, decodeBackup, PasswordRequiredError } from '../src/lib/backup-format'
+import { STORES, validateBackup, encodeBackup, decodeBackup, migrateBackup, PasswordRequiredError } from '../src/lib/backup-format'
 import { buildCsv, csvRows } from '../src/lib/csv'
 import { fixture } from './fixtures'
 import { createOrChangePin, lockVault } from '../src/lib/vault'
@@ -46,7 +46,7 @@ test('invalid version, missing store, duplicates, fields, timestamps, enums and 
   await importBackup(fixture(), 'replace')
   const before = await snapshot()
   const malformed = [
-    { ...fixture(), version: '3.0.0' },
+    { ...fixture(), version: '9.9.9' },
     { ...fixture(), customers: undefined },
     { ...fixture(), exportedAt: 'not a date' },
     { ...fixture(), products: [fixture().products[0], fixture().products[0]] },
@@ -54,6 +54,14 @@ test('invalid version, missing store, duplicates, fields, timestamps, enums and 
     { ...fixture(), customers: [{ ...fixture().customers[0], updatedAt: NaN }] },
     { ...fixture(), settings: [{ ...fixture().settings[0], currency: '???' }] },
     { ...fixture(), invoices: [{ ...fixture().invoices[0], items: [{}] }] },
+    { ...fixture(), subscriptions: [{ ...fixture().subscriptions[0], currency: 'GBP' }] },
+    { ...fixture(), subscriptions: [{ ...fixture().subscriptions[0], billingCycle: 'weekly' }] },
+    { ...fixture(), subscriptions: [{ ...fixture().subscriptions[0], amountMinor: 9.9 }] },
+    { ...fixture(), subscriptions: [{ ...fixture().subscriptions[0], startDate: '31/01/2026' }] },
+    { ...fixture(), subscriptions: [{ ...fixture().subscriptions[0], startDate: '2026-02-30' }] },
+    { ...fixture(), subscriptions: [{ ...fixture().subscriptions[0], periodMonths: 0 }] },
+    { ...fixture(), subscriptions: [{ ...fixture().subscriptions[0], cancelledAt: 'yesterday' }] },
+    { ...fixture(), subscriptions: [{ ...fixture().subscriptions[0], autoRenew: 'yes' }] },
   ]
   for (const value of malformed) {
     assert.throws(() => validateBackup(value))
@@ -85,9 +93,9 @@ test('merge adds, updates, skips older/tied IDs in ALL stores, preserving local-
     const rows = incoming[name] as { id: string; updatedAt: number }[]
     rows.push({ ...rows[0], id: `${name}-new` })
   }
-  assert.deepEqual(await importBackup(incoming, 'merge'), { added: 8, updated: 8, skipped: 0 })
-  assert.deepEqual(await importBackup(incoming, 'merge'), { added: 0, updated: 0, skipped: 16 })
-  assert.deepEqual(await importBackup(fixture(), 'merge'), { added: 0, updated: 0, skipped: 8 })
+  assert.deepEqual(await importBackup(incoming, 'merge'), { added: 9, updated: 9, skipped: 0 })
+  assert.deepEqual(await importBackup(incoming, 'merge'), { added: 0, updated: 0, skipped: 18 })
+  assert.deepEqual(await importBackup(fixture(), 'merge'), { added: 0, updated: 0, skipped: 9 })
   const result = await exportBackup()
   for (const name of STORES) {
     assert.equal(result[name].length, 3)
@@ -120,6 +128,23 @@ for (const mode of ['replace', 'merge'] as const) {
     assert.deepEqual(await snapshot(), before)
   })
 }
+
+test('a version 2 backup migrates to version 3 with its data untouched and an empty subscription list', () => {
+  const legacy = fixture() as unknown as Record<string, unknown>
+  delete legacy.subscriptions
+  legacy.version = '2.0.0'
+  const migrated = migrateBackup(JSON.parse(JSON.stringify(legacy)))
+  assert.equal(migrated.version, '3.0.0')
+  assert.deepEqual(migrated.subscriptions, [])
+  const original = fixture()
+  for (const name of STORES) {
+    if (name === 'subscriptions') continue
+    assert.deepEqual(migrated[name], original[name], name)
+  }
+  // The migrated file stays importable and its new store is writable.
+  validateBackup(migrated)
+  assert.throws(() => migrateBackup({ ...legacy, version: '0.9.0' }), /Unsupported backup version/)
+})
 
 test('version 1 DB migrates without data loss, allowing same invoice number with different IDs', async () => {
   lockVault(); globalThis.indexedDB = new IDBFactory()

@@ -4,7 +4,7 @@ import type { FatoratiBackup } from '../src/lib/db'
 export function fixture(): FatoratiBackup {
   const base = { currency: 'EUR', language: 'en' as const, occurredAt: 100, createdAt: 100, updatedAt: 200 }
   return {
-    version: '2.0.0', security:{appLock:true,biometricEnabled:false}, preferences: {...defaultPreferences}, exportedAt: 300,
+    version: '3.0.0', security:{appLock:true,biometricEnabled:false}, preferences: {...defaultPreferences}, exportedAt: 300,
     businesses: [{ ...base, id: 'business', name: 'متجر Café', ownerName: 'Owner', phone: '', email: '', address: '', city: '' }],
     customers: [{ ...base, id: 'customer', name: 'عميل André', email: '', phone: '', address: '', city: '', notes: '', balance: 0 }],
     projects: [{ ...base, id: 'project', name: 'Work', customerId: 'customer', description: '', status: 'active', budget: 20 }],
@@ -13,5 +13,6 @@ export function fixture(): FatoratiBackup {
     expenses: [{ ...base, id: 'expense', description: 'Dépense', amount: 5, category: 'Travel', date: '2026-09-01', vendor: '' }],
     products: [{ ...base, id: 'product', name: 'Product', description: '', sku: '', unitPrice: 10, unit: 'pc', stock: 3 }],
     settings: [{ ...base, id: 'settings', businessId: 'business', currency: 'EUR', taxRate: 0, invoicePrefix: 'INV', estimatePrefix: 'EST', theme: 'light', language: 'en' }],
+    subscriptions: [{ ...base, id: 'subscription', serviceName: 'مرصد Service', amountMinor: 9900, currency: 'EUR', billingCycle: 'monthly', autoRenew: true, startDate: '2026-01-31' }],
   }
 }

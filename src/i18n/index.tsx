@@ -15,9 +15,9 @@ export function t(key: string, params: Record<string, string | number> = {}, lan
 }
 const I18nContext = createContext({ language: 'en' as Language, t })
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const prefs = useSyncExternalStore(subscribePreferences, getPreferences)
+  const prefs = useSyncExternalStore(subscribePreferences, getPreferences, getPreferences)
   return <I18nContext.Provider value={{ language: prefs.language, t }}>{children}</I18nContext.Provider>
 }
 export const useI18n = () => useContext(I18nContext)
-export function usePreferences() { return useSyncExternalStore(subscribePreferences, getPreferences) }
+export function usePreferences() { return useSyncExternalStore(subscribePreferences, getPreferences, getPreferences) }
 export function errorText(error: unknown) { return error instanceof Error && typeof dictionaries.en[error.message] === 'string' ? t(error.message) : t('Operation failed') }

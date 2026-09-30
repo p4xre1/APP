@@ -1,3 +1,74 @@
+# Unreleased — subscriptions tracker and reminders (2026-09-30)
+
+Offline subscription tracker (streaming, hosting, rent, insurance, licences) with
+local reminders. Still version 2.1.0 until it is released; the backup format moves
+to 3.0.0.
+
+Data and storage
+- New encrypted store `subscriptions` (ninth store, same vault, same import
+  transaction): service name, category, amount in the currency's minor unit
+  (integer, exact totals), currency MAD/USD/EUR, cycle
+  `monthly`/`yearly`/`one_time_period` with `periodMonths` 1..120, `autoRenew`,
+  `startDate` (ISO), payment method, notes, `cancelledAt`.
+- Backup format **3.0.0**: `migrateBackup` adds an empty `subscriptions` array to
+  older files and leaves every record untouched; import validation rejects bad
+  subscription rows before anything is written. IndexedDB `fatorati-offline-v1`
+  goes to version **4**.
+- `resetApp`, lock-clear and the session cache all clear subscriptions too.
+
+Dates, status and totals (pure, in `src/lib/subscriptions.ts`)
+- Month-end-correct renewal math (`addMonthsClamped`: the 31st renews on the last
+  day of a shorter month), leap years, future start dates, very old start dates,
+  and DST/time-zone-safe calendar handling through the device's local date.
+- Status `active` / `expiring_soon` / `expired` / `cancelled` with the boundary
+  exactly at `warnDays` (default 7, configurable 1..30) and at 0 days. Auto-renew
+  entries never expire.
+- Monthly/yearly normalisation per currency; cancelled and expired entries are
+  excluded; different currencies are **never** summed together.
+
+Reminders (local notifications only)
+- `@capacitor/local-notifications` 8.3.1, `isExactNotification: false` everywhere;
+  `SCHEDULE_EXACT_ALARM` and `USE_EXACT_ALARM` are removed from the merged
+  manifest with `tools:node="remove"`, `POST_NOTIFICATIONS` is declared, and no
+  INTERNET permission is added.
+- Reminders are opt-in, scheduled at 09:00 local time, `warnDays` before each
+  renewal plus an optional day-of reminder. The permission prompt appears when
+  reminders are enabled (not at app start); a refusal shows a clear message and
+  falls back to the in-app banner.
+- The pending set is rebuilt on launch, after every add/edit/delete and after a
+  restore; deleted or cancelled entries are removed. A warning window that has
+  already opened is clamped to today instead of being lost.
+- Privacy default "Hide service names in notifications" (ON): the notification
+  reads "A subscription needs your attention".
+
+UI
+- New **Subscriptions** module in the navigation: list sorted by nearest date
+  with status chip and days left, add/edit form with validation, delete with
+  confirmation, cancel/reactivate, summary card with per-currency monthly and
+  yearly totals, status/category filters and name search, empty state.
+- In-app attention banner on the Dashboard and on the Subscriptions screen —
+  independent of notification permission.
+- Settings → Subscription reminders (toggle, 1..30 days, day-of reminder, hide
+  service names, next-reminder preview, permission state).
+
+Export (offline)
+- "Export all subscriptions" to `.xlsx` (`write-excel-file` 4.1.1, MIT — chosen
+  over the unmaintained npm `xlsx` and the heavier exceljs) and to PDF through the
+  existing canvas/jsPDF pipeline with Arabic/RTL fonts. Columns: service,
+  category, amount, currency, cycle, auto-renew, start date, next renewal/end,
+  status, payment method, notes, plus one totals row per currency.
+- Both exports go through the existing staged-export flow and cache purge, and
+  both carry the "Exported files are not encrypted" warning.
+
+Tests
+- New suites: `subscriptions.test.ts` (date math, boundaries, totals,
+  validation), `notifications.test.ts` (planning and scheduling against a mocked
+  Android bridge, hidden-name mode, denied permission, plugin failure),
+  `subscription-export.test.ts` (row building, per-currency totals, real xlsx
+  bytes parsed back, PDF bytes with a stubbed canvas), `subscriptions-ui.test.ts`
+  (translated strings in all five dictionaries, server render in five languages,
+  no network surface, permissions) and a v2→v3 backup migration test.
+
 # 2.1.0 — invoice lifecycle, tax, numbering, hardening (2026-09-30)
 
 Security and compliance

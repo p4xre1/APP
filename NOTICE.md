@@ -12,6 +12,7 @@ following third-party components. Nothing here changes their licenses.
 | @capacitor/filesystem | 8.1.3 | MIT |
 | @capacitor/haptics | 8.0.2 | MIT |
 | @capacitor/keyboard | 8.0.5 | MIT |
+| @capacitor/local-notifications | 8.3.1 | MIT |
 | @capacitor/preferences | 8.0.1 | MIT |
 | @capacitor/share | 8.0.2 | MIT |
 | @capacitor/splash-screen | 8.0.2 | MIT |
@@ -20,6 +21,7 @@ following third-party components. Nothing here changes their licenses.
 | jspdf | 4.2.x | MIT |
 | lucide-react | 1.4x | ISC |
 | react, react-dom | 19.x | MIT |
+| write-excel-file | 4.1.x | MIT |
 | zustand | 5.x | MIT |
 
 ### MPL-2.0 note
@@ -36,6 +38,9 @@ repository.
 @capacitor/cli (MIT), @tailwindcss/vite and tailwindcss (MIT), @vitejs/plugin-react
 (MIT), vite (MIT), typescript (Apache-2.0), tsx (MIT), playwright (Apache-2.0),
 fake-indexeddb (Apache-2.0), @types/* (MIT).
+
+`write-excel-file` bundles `fflate` (MIT) to write the .xlsx container. No
+network access is involved in generating or opening an export.
 
 ## Fonts (bundled as WOFF2 in `public/fonts`)
 

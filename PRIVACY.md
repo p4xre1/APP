@@ -70,6 +70,13 @@ by the system.
 ## Permissions
 
 - `USE_BIOMETRIC` — optional biometric unlock (only active if you enable it).
+- `POST_NOTIFICATIONS` — optional subscription reminders. It is requested only
+  when you turn reminders on in Settings, and reminders are scheduled by the
+  phone's own notification system: the title and text are generated on the
+  device and nothing is sent anywhere. "Hide service names in notifications" is
+  on by default, so a reminder does not even show which service it is about.
+  Android's exact-alarm permissions (`SCHEDULE_EXACT_ALARM`,
+  `USE_EXACT_ALARM`) are explicitly removed from the merged manifest.
 - No network, storage, location, contacts, camera, microphone or advertising
   permissions are requested. The app declares no `INTERNET` permission.
 

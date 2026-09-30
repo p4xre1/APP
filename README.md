@@ -87,6 +87,66 @@ network, no INTERNET permission and no relaxation of the shipped
   "general information, not tax advice" disclaimer.
 
 
+## Subscriptions tracker (offline)
+
+Fatorati can now track what leaves the account on a recurring basis: streaming,
+hosting, insurance, rent, a licence. It is the same offline architecture as the
+rest of the app — no INTERNET permission, the shipped CSP untouched, and the
+records live in the encrypted vault (`subscriptions` is a ninth store inside the
+same database and the same transaction).
+
+- **Data**: service name, category, amount (stored in the currency's minor unit
+  so totals stay exact), currency (MAD, USD, EUR), billing cycle (monthly,
+  yearly, one-time period with 1..120 months), auto-renew, start date, payment
+  method, notes and a cancellation timestamp.
+- **Dates and status**: the next renewal rolls the start date forward, so a
+  subscription that started on the 31st renews on the last day of shorter months
+  and handles leap years. Status is `active` (more than warn-days away),
+  `expiring soon` (0..warn-days, default 7), `expired` (a non-renewing entry
+  whose end passed) or `cancelled`. Auto-renewing entries never expire; they show
+  "renews on <date>". The device's local calendar date is used, so DST switches
+  and travel do not shift a renewal day.
+- **Totals per currency, never mixed**: the summary card, the Excel export and
+  the PDF export each show one monthly and one yearly total per currency. MAD and
+  USD are never added together. Cancelled and expired entries are excluded.
+- **Filters**: status, category and a name search, sorted by the nearest date
+  (overdue first, cancelled last), with a status chip and days left.
+- **Reminders**: local notifications only, from `@capacitor/local-notifications`.
+  Nothing leaves the phone and no exact alarm is requested: every notification is
+  scheduled with `isExactNotification: false` and the merged manifest strips
+  `SCHEDULE_EXACT_ALARM`/`USE_EXACT_ALARM` with `tools:node="remove"`, so the app
+  never appears under Android's "Alarms & reminders" special access.
+  - Reminders are **opt-in** (Settings → Subscription reminders), fire at 09:00
+    local time, warn 1–30 days before the renewal (default 7) and optionally
+    again on the day itself. The set is rebuilt on every launch, after any add or
+    edit, and after a restore; deleted or cancelled entries lose their
+    notification.
+  - `POST_NOTIFICATIONS` is requested **when reminders are enabled**, never at app
+    start. If the permission is refused the app says so and relies on the in-app
+    banner, which needs no permission at all.
+  - **Privacy default**: "Hide service names in notifications" is ON, so a
+    reminder only says "A subscription needs your attention". Turning it off
+    shows the service name.
+  - Some Android vendors (Xiaomi/MIUI, Huawei, Oppo, Vivo, Samsung and others)
+    delay or block notifications while battery optimization is active, and some
+    kill scheduled alarms when the app is force-stopped. The in-app banner on the
+    Dashboard and at the top of the Subscriptions screen is independent of the OS
+    and always lists expiring and expired entries.
+- **Exports**: "Export all subscriptions" writes an `.xlsx` (via
+  `write-excel-file`, MIT, no network) or a PDF through the existing canvas/jsPDF
+  pipeline with the bundled Inter/Tajawal fonts, Arabic RTL included. Columns:
+  service, category, amount, currency, cycle, auto-renew, start date, next
+  renewal/end, status, payment method, notes, then the per-currency totals.
+  Exported files are **not encrypted** — delete them when you are done; they are
+  staged in the app cache like the other exports and cleared at the next start or
+  unlock.
+- **Backups**: the backup format is now **3.0.0** and includes the subscriptions
+  store. Version 1.0.0 and 2.0.0 files still import: the migration adds an empty
+  subscription list and leaves every other record untouched. The same limits
+  apply (25 MB, 20 000 records per store, 500 items per document, 10 000
+  characters per field), and invalid subscription values are rejected before
+  anything is written.
+
 ## First run, PIN and recovery
 
 Create and confirm a six-digit PIN **before any business data is rendered**. Existing installations also enroll a PIN before loading their records. This atomically encrypts existing IndexedDB records without deleting them. Arabic-Indic PIN input is normalized to the same six digits. App lock is mandatory in this version, so **exporting a backup requires a separate backup password**. The codec still accepts old unencrypted backups.
@@ -148,11 +208,11 @@ Light/dark/system mode, ten accent presets/custom color, and comfortable/compact
 
 Android's file picker can put the app in the background. A selected File handle is retained by a DOM listener outside the unmounted data UI, **not decrypted while locked**. Unlock, then return to Settings if prompted to finish the import. Onboarding logo selection uses the same lifecycle-safe handoff. If Android kills the process, choose the file again.
 
-Backup **2.0.0** contains the eight stores, all display/security policy preferences, document currency/language/rates/times/color settings and a non-secret biometric-enabled flag. No PIN verifier, encryption key or biometric credential is exported. The destination keeps its local PIN; biometric credentials cannot transfer and must be enrolled locally. Replace restores display preferences; Merge uses their `updatedAt`. Imported preferences are committed with records and safely applied from a pending marker after unlock.
+Backup **3.0.0** contains the nine stores (subscriptions included), all display/security policy preferences, document currency/language/rates/times/color settings and a non-secret biometric-enabled flag. No PIN verifier, encryption key or biometric credential is exported. The destination keeps its local PIN; biometric credentials cannot transfer and must be enrolled locally. Replace restores display preferences; Merge uses their `updatedAt`. Imported preferences are committed with records and safely applied from a pending marker after unlock.
 
 Version **1.0.0** JSON and encrypted backups remain importable. Migration fills currency/language/time/preferences defaults, preserves IDs/timestamps and quantizes financial amounts. Existing display invoice numbers are not unique identity keys, so records from different phones with the same number can coexist. The UI remains single-business, not a multi-company account manager.
 
-An import uses one transaction spanning **all eight stores plus metadata**, stronger than separate per-store transactions. Encryption is prepared before opening that transaction to avoid IndexedDB auto-close during crypto awaits. A failure leaves the whole import unchanged.
+An import uses one transaction spanning **all nine stores plus metadata**, stronger than separate per-store transactions. Encryption is prepared before opening that transaction to avoid IndexedDB auto-close during crypto awaits. A failure leaves the whole import unchanged.
 
 The last-backup Preferences date records successful share handoff, not proof of delivery. Failed/canceled shares reported by Capacitor do not reset it; CSV/PDF/imports do not either. The dashboard reminds after seven days or when no backup has been recorded. Native exports use unique Cache folders and FileProvider; only non-native test/browser execution uses `<a download>`.
 
@@ -228,7 +288,7 @@ The authoritative design source is now **https://github.com/p4xre1/FatooraLaw**,
 
 - Light tokens match the reference: blue `#2563eb`, canvas `#f4f6f9`, ink `#0b1220`, white cards and navy `#0f172a` sidebar. Borders, subtle card shadows, compact headings/fields/buttons and navigation typography follow the reference kit.
 - Fonts are bundled locally: **Inter**, **Tajawal**, **Sora** and **JetBrains Mono**, with Latin/Latin-extended and Arabic subsets as applicable. Inter is the application face; Tajawal is used for Arabic. Sora/display and JetBrains Mono tokens are available as in the reference. Fontsource **5.3.0** distributions provide the WOFF2 binaries; their SIL Open Font License files are in `public/fonts`. No Google Fonts stylesheet or runtime font download is used. PDFs also wait for the bundled Inter/Tajawal face before rendering.
-- The reference's collapsible navy sidebar, module search, grouped navigation, sticky topbar, profile menu and quick-action presentation are adapted to the existing nine offline modules. On phones the sidebar is an accessible modal drawer, not an overflowing bottom navigation strip. Profile actions go to local Settings or lock the vault; they do not introduce accounts or cloud login.
+- The reference's collapsible navy sidebar, module search, grouped navigation, sticky topbar, profile menu and quick-action presentation are adapted to the existing ten offline modules. On phones the sidebar is an accessible modal drawer, not an overflowing bottom navigation strip. Profile actions go to local Settings or lock the vault; they do not introduce accounts or cloud login.
 - The dashboard uses the reference's metric cards, area chart, grouped-bar chart, donut and legends. They derive **real local records**, never seeded balances or fake percentage growth. The currency selector never combines currencies. Metrics show all-time figures; the 6/8/12-month selector controls chart ranges, grouped by Gregorian billing month in the chosen time zone. Revenue is paid invoice total by record occurrence/creation date (not a bank settlement date). Net bars support negative values. The donut explicitly shows positive expenses only; refunds still affect net totals. A text table exposes chart values without relying on hover/vision.
 - Light/dark/system and custom accent preferences remain persisted. A topbar sun/moon control switches light/dark; Settings still supports system mode. Dark mode changes semantic colors while using exactly the same components and structure. Contrast-aware accent/hover text, RTL, digit choices and compact spacing remain supported.
 - All existing customers/projects/invoices/estimates/expenses/products/reports/settings, PIN/biometrics/encryption, backup/merge/restore, document currencies/dates/languages and offline PDF/CSV sharing remain. New UI strings are in all five dictionaries. There are no emoji characters in `src`.
@@ -256,6 +316,6 @@ compileSdk 36 upgrade, meaning the app compiles and links against the platform.
 
 ### Still requires physical Android/emulator verification
 
-Native biometric hardware/enrollment/cancellation and its Activity lifecycle, actual Android background/process-death locking, share-sheet delivery to real apps, first-paint/native splash/status-bar behavior, screenshot/recents protection, and signed release builds have **not** been verified on a device. Browser tests and native-bridge mocks do not establish these. Before distributing: run the build on a Java 21/SDK machine, test all five languages on real screens, background every form/picker/prompt, and transfer a backup between two Android phones. Confirm blocked screenshots, biometric fallback to the PIN, and the PIN/lockout/restore recovery paths.
+Native biometric hardware/enrollment/cancellation and its Activity lifecycle, actual Android background/process-death locking, share-sheet delivery to real apps, first-paint/native splash/status-bar behavior, screenshot/recents protection, and signed release builds have **not** been verified on a device. For the subscriptions tracker specifically, the following need a real device: the `POST_NOTIFICATIONS` prompt and its denied path, whether a scheduled reminder actually appears (including after battery optimization and a force-stop), the notification tap/foreground behaviour, and the Android share sheet for the `.xlsx` and `.pdf` exports. Browser tests and native-bridge mocks do not establish these. Before distributing: run the build on a Java 21/SDK machine, test all five languages on real screens, background every form/picker/prompt, and transfer a backup between two Android phones. Confirm blocked screenshots, biometric fallback to the PIN, and the PIN/lockout/restore recovery paths.
 
 The source ZIP excludes `.git`, `node_modules`, `dist`, generated Capacitor assets/Cordova scaffolding, local SDK configuration, signing secrets, test artifacts, caches and build outputs. It includes native launcher/splash resources, Android source, Gradle wrapper, lockfile, translations and tests. Build and sync regenerate excluded assets.

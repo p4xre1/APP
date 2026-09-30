@@ -4,7 +4,7 @@ import { IDBFactory, IDBObjectStore } from 'fake-indexeddb'
 import { createOrChangePin, unlockPin, lockVault, isUnlocked, lockDelay, readMeta } from '../src/lib/vault'
 import { readSnapshot, commit } from '../src/lib/storage'
 import { importBackup, exportBackup, getAll, downloadBackupFile } from '../src/lib/db'
-import { decodeBackup, encodeBackup, migrateBackup, STORES } from '../src/lib/backup-format'
+import { BACKUP_VERSION, decodeBackup, encodeBackup, migrateBackup, STORES } from '../src/lib/backup-format'
 import { fixture } from './fixtures'
 
 beforeEach(()=>{lockVault();globalThis.indexedDB=new IDBFactory()})
@@ -62,7 +62,7 @@ test('old v1 backup migrates currency, language, preferences and UTC timestamps'
   old.version='1.0.0';delete old.preferences;delete old.security
   for(const name of ['businesses','invoices','estimates','expenses'])for(const row of old[name]){delete row.currency;delete row.language;delete row.occurredAt;delete row.pdfColor}
   const next=migrateBackup(old)
-  assert.equal(next.version,'3.0.0');assert.equal(next.preferences.defaultCurrency,'EUR')
+  assert.equal(next.version,BACKUP_VERSION);assert.equal(next.preferences.defaultCurrency,'EUR')
   assert.equal(next.invoices[0].currency,'EUR');assert.equal(next.expenses[0].occurredAt,100)
   assert.equal(next.security.biometricEnabled,false)
   await createOrChangePin('123456');await importBackup(next,'replace');assert.equal((await exportBackup()).invoices.length,1)

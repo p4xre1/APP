@@ -1,22 +1,70 @@
 import type { FatoratiBackup } from './db'
 
-export const BACKUP_VERSION = '3.0.0'
+/**
+ * 3.1.0 adds the document template snapshot, the item unit/section/discount fields
+ * and the seller identifiers; every one of them is optional, so a 3.0.0 file
+ * imports unchanged and a document without a snapshot renders the legacy look.
+ */
+export const BACKUP_VERSION = '3.1.0'
 /** Formats this build can still read. Everything older is migrated up on import. */
-export const SUPPORTED_BACKUP_VERSIONS = ['1.0.0', '2.0.0', BACKUP_VERSION]
+export const SUPPORTED_BACKUP_VERSIONS = ['1.0.0', '2.0.0', '3.0.0', BACKUP_VERSION]
 /** Import limits. They bound work before any decrypt or write happens. */
 export const MAX_BACKUP_BYTES = 25 * 1024 * 1024
 export const MAX_RECORDS_PER_STORE = 20_000
 export const MAX_ITEMS_PER_DOCUMENT = 500
 export const MAX_TEXT_LENGTH = 10_000
+export const MAX_ITEM_TEXT_LENGTH = 120
+export const MAX_FOOTER_NOTE_LENGTH = 160
+export const MAX_TEMPLATE_VERSION = 1_000
+
+/**
+ * A stored image has to be a base64 bitmap data URL inside the documented cap.
+ * SVG is refused on purpose: it is a document format, not a photo, and nothing in
+ * the app ever produces one.
+ */
+/** Subtypes the app itself produces ('image/png' -> 'png'), so nothing else passes. */
+const IMAGE_SUBTYPES = IMAGE_MIME_TYPES.map(type => type.slice('image/'.length))
+
+export function isStoredImage(value: unknown): boolean {
+  if (typeof value !== 'string') return false
+  const match = /^data:image\/([a-z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/i.exec(value)
+  if (!match) return false
+  const kind = match[1].toLowerCase()
+  if (!IMAGE_SUBTYPES.includes(kind)) return false
+  const payload = match[2]
+  const bytes = Math.floor((payload.length * 3) / 4) - (payload.endsWith('==') ? 2 : payload.endsWith('=') ? 1 : 0)
+  return bytes <= MAX_BACKUP_IMAGE_BYTES
+}
+
+/** Shape of the optional template snapshot, validated field by field. */
+export function isTemplateSnapshot(value: unknown): boolean {
+  if (!object(value)) return false
+  if (!isLayoutId(value.layoutId) || !isPresetId(value.presetId) || !isAccentId(value.accent)) return false
+  if (!Number.isInteger(value.templateVersion) || (value.templateVersion as number) < 1 || (value.templateVersion as number) > MAX_TEMPLATE_VERSION) return false
+  if (!isTaxRegion(value.region)) return false
+  if (value.footerNote !== undefined && (typeof value.footerNote !== 'string' || value.footerNote.length > MAX_FOOTER_NOTE_LENGTH)) return false
+  for (const key of ['showLogo', 'showStamp']) if (value[key] !== undefined && typeof value[key] !== 'boolean') return false
+  if (value.labels !== undefined) {
+    if (!object(value.labels)) return false
+    for (const [column, label] of Object.entries(value.labels)) {
+      if (!['description', 'unit', 'quantity', 'unitPrice', 'discount', 'total'].includes(column)) return false
+      if (typeof label !== 'string' || !label.trim() || label.length > 40) return false
+    }
+  }
+  return true
+}
 export const MIN_PASSWORD_LENGTH = 8
 export const MIN_BACKUP_ITERATIONS = 10_000
 export const MAX_BACKUP_ITERATIONS = 5_000_000
 import { STORES, type StoreName } from './schema'
+import type { TaxRegion } from '../store/types'
 export { STORES } from './schema'
 export type { StoreName } from './schema'
 import { defaultPreferences, validPreferences, validCurrency, languages } from './preferences'
 import { roundMoney } from './format'
-import { isTaxRegion } from './taxGuide'
+import { DEFAULT_TAX_REGION, isTaxRegion } from './taxGuide'
+import { MAX_BACKUP_IMAGE_BYTES, IMAGE_MIME_TYPES } from './images'
+import { isAccentId, isLayoutId, isPresetId, LEGACY_TEMPLATE } from './templates'
 import { isSubscriptionCurrency, isSubscriptionCycle, isISODate, MAX_PERIOD_MONTHS, warnDays } from './subscriptions'
 export type ImportMode = 'replace' | 'merge'
 export interface ImportSummary { added: number; updated: number; skipped: number }
@@ -75,6 +123,9 @@ export function validateBackup(value: unknown): asserts value is FatoratiBackup 
       if (record.paidAt !== undefined && !timestamp(record.paidAt)) throw invalid()
       if (record.taxNumber !== undefined && (typeof record.taxNumber !== 'string' || record.taxNumber.length > 64)) throw invalid()
       if (name === 'settings') {
+        if (record.templateLayout !== undefined && !isLayoutId(record.templateLayout)) throw invalid()
+        if (record.templatePreset !== undefined && !isPresetId(record.templatePreset)) throw invalid()
+        if (record.templateAccent !== undefined && !isAccentId(record.templateAccent)) throw invalid()
         if (record.taxRegion !== undefined && !isTaxRegion(record.taxRegion)) throw invalid()
         if (record.taxAssistantRegion !== undefined && !isTaxRegion(record.taxAssistantRegion)) throw invalid()
         for (const key of ['taxAssistantVisible', 'taxAssistantSeen', 'subscriptionReminders', 'subscriptionDayOfReminder', 'subscriptionHideNames']) {
@@ -102,7 +153,17 @@ export function validateBackup(value: unknown): asserts value is FatoratiBackup 
         if (record.exchangeRate !== undefined && (!finite(record.exchangeRate) || record.exchangeRate <= 0 || !validCurrency(record.rateCurrency))) throw invalid()
         if (record.pdfColor !== undefined && typeof record.pdfColor !== 'boolean') throw invalid()
       }
-      const optional = name === 'businesses' ? ['city', 'logo']
+      if (name === 'businesses') {
+        for (const key of ['ifNumber', 'tpNumber', 'rcNumber', 'cnieNumber']) {
+          if (record[key] !== undefined && (typeof record[key] !== 'string' || record[key].length > 64)) throw invalid()
+        }
+        for (const key of ['logo', 'stamp']) if (record[key] !== undefined && !isStoredImage(record[key])) throw invalid()
+      }
+      if (name === 'invoices' || name === 'estimates') {
+        if (record.template !== undefined && !isTemplateSnapshot(record.template)) throw invalid()
+        if (record.paymentMethod !== undefined && (typeof record.paymentMethod !== 'string' || record.paymentMethod.length > MAX_ITEM_TEXT_LENGTH)) throw invalid()
+      }
+      const optional = name === 'businesses' ? ['city']
         : name === 'expenses' ? ['receipt']
         : name === 'invoices' || name === 'estimates' ? ['projectId'] : []
       if (optional.some(key => record[key] !== undefined && typeof record[key] !== 'string')) throw invalid()
@@ -114,6 +175,10 @@ export function validateBackup(value: unknown): asserts value is FatoratiBackup 
             || typeof item.description !== 'string'
             || !['quantity', 'unitPrice', 'total'].every(key => finite(item[key]))
             || (item.productId !== undefined && typeof item.productId !== 'string')) throw invalid()
+          for (const key of ['unit', 'section']) {
+            if (item[key] !== undefined && (typeof item[key] !== 'string' || item[key].length > MAX_ITEM_TEXT_LENGTH)) throw invalid()
+          }
+          if (item.discount !== undefined && !(finite(item.discount) && item.discount >= 0 && item.discount <= 100)) throw invalid()
           itemIds.add(item.id)
         }
       }
@@ -202,6 +267,12 @@ export async function decodeBackup(text: string, password?: string): Promise<Fat
 }
 
 /** v1 -> v2; ISO timestamps in portable files -> UTC milliseconds in memory. */
+/** Region a pre-template file was written under: its own settings, else the default. */
+function legacyRegion(value: Record<string, unknown>): TaxRegion {
+  const settings = Array.isArray(value.settings) ? value.settings[0] : undefined
+  const region = object(settings) ? settings.taxRegion : undefined
+  return isTaxRegion(region) ? region : DEFAULT_TAX_REGION
+}
 export function migrateBackup(input: unknown): FatoratiBackup {
   if (!object(input) || !SUPPORTED_BACKUP_VERSIONS.includes(input.version as string)) throw new Error('Unsupported backup version')
   const value = JSON.parse(JSON.stringify(input), (key, item) => {
@@ -230,8 +301,18 @@ export function migrateBackup(input: unknown): FatoratiBackup {
     value.version = '2.0.0'
   }
   // 2.0.0 -> 3.0.0: the subscriptions store is new, so older files simply have none.
+  if (value.subscriptions === undefined) (value as Record<string, unknown>).subscriptions = []
+  // 3.0.0 -> 3.1.0: a document written before templates existed gets the snapshot it
+  // already renders as - classic layout, general preset, template version 1, the app
+  // accent, no logo. Writing it down is what stops a later Settings change from moving
+  // an old invoice, and it is the only reason the file version is bumped.
   if (value.version !== BACKUP_VERSION) {
-    if (value.subscriptions === undefined) (value as Record<string, unknown>).subscriptions = []
+    const region = legacyRegion(value)
+    for (const name of ['invoices', 'estimates'] as const) {
+      for (const row of value[name] as unknown as Record<string, unknown>[]) {
+        if (row.template === undefined) row.template = { ...LEGACY_TEMPLATE, labels: { ...LEGACY_TEMPLATE.labels }, region }
+      }
+    }
     value.version = BACKUP_VERSION
   }
   validateBackup(value)

@@ -2,9 +2,9 @@ import { beforeEach, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { IDBFactory, IDBObjectStore } from 'fake-indexeddb'
 import { exportBackup, importBackup, loadBackupFile } from '../src/lib/db'
-import { STORES, validateBackup, encodeBackup, decodeBackup, migrateBackup, PasswordRequiredError } from '../src/lib/backup-format'
+import { BACKUP_VERSION, STORES, validateBackup, encodeBackup, decodeBackup, migrateBackup, PasswordRequiredError } from '../src/lib/backup-format'
 import { buildCsv, csvRows } from '../src/lib/csv'
-import { fixture } from './fixtures'
+import { fixture, legacyFixture } from './fixtures'
 import { createOrChangePin, lockVault } from '../src/lib/vault'
 
 beforeEach(async () => { lockVault(); globalThis.indexedDB = new IDBFactory(); await createOrChangePin('123456') })
@@ -130,11 +130,11 @@ for (const mode of ['replace', 'merge'] as const) {
 }
 
 test('a version 2 backup migrates to version 3 with its data untouched and an empty subscription list', () => {
-  const legacy = fixture() as unknown as Record<string, unknown>
+  const legacy = legacyFixture() as unknown as Record<string, unknown>
   delete legacy.subscriptions
   legacy.version = '2.0.0'
   const migrated = migrateBackup(JSON.parse(JSON.stringify(legacy)))
-  assert.equal(migrated.version, '3.0.0')
+  assert.equal(migrated.version, BACKUP_VERSION)
   assert.deepEqual(migrated.subscriptions, [])
   const original = fixture()
   for (const name of STORES) {

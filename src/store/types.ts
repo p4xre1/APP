@@ -1,4 +1,5 @@
 import type { Language } from '../lib/preferences'
+import type { AccentId, DocumentTemplate, LayoutId, PresetId } from '../lib/templates'
 /**
  * Fatorati Offline - Types
  * 100% Local • Offline - Simple business management
@@ -20,6 +21,8 @@ export type ModuleKey =
   | 'taxGuide'
   /** Help & legal screens; opened from Settings and from the screens before the app. */
   | 'help' | 'faq' | 'privacy' | 'terms'
+  /** Document template picker with the live preview; opened from Settings. */
+  | 'templates'
 
 /** Billing cadence of a tracked subscription. */
 export type SubscriptionCycle = 'monthly' | 'yearly' | 'one_time_period'
@@ -56,7 +59,16 @@ export type TaxRegion = 'MA' | 'US'
 
 export interface Business {
   currency?: string
+  /** Moroccan seller identifiers. `taxNumber` holds the ICE; the others are optional
+   *  on the record but are always printed on a Moroccan document (with a dash when
+   *  they are empty, so nobody silently loses a required mention). */
   taxNumber?: string
+  ifNumber?: string
+  tpNumber?: string
+  rcNumber?: string
+  cnieNumber?: string
+  /** Optional stamp or signature image (small, PNG/JPEG data URL). */
+  stamp?: string
   id: string
   name: string
   ownerName: string
@@ -101,9 +113,19 @@ export interface InvoiceItem {
   quantity: number
   unitPrice: number
   total: number
+  /** Unit the quantity is measured in (m², hour, trip...), shown by some presets. */
+  unit?: string
+  /** Grouping key of the line, used by the construction preset (materials/labour). */
+  section?: string
+  /** Optional line discount in percent; `total` is already discounted. */
+  discount?: number
 }
 
 export interface Invoice {
+  /** Template snapshot: layout, topic preset, accent, footer note, pinned region. */
+  template?: DocumentTemplate
+  /** Free wording of how the invoice is paid; printed on the document. */
+  paymentMethod?: string
   taxRate?: number // Percent applied to the subtotal; absent/0 means no tax.
   paidAt?: number // UTC milliseconds when the invoice was marked paid.
   currency?: string
@@ -129,6 +151,10 @@ export interface Invoice {
 }
 
 export interface Estimate {
+  /** Template snapshot: layout, topic preset, accent, footer note, pinned region. */
+  template?: DocumentTemplate
+  /** Free wording of how the estimate is paid; printed on the document. */
+  paymentMethod?: string
   taxRate?: number
   currency?: string
   language?: Language
@@ -207,6 +233,10 @@ export interface Settings {
   subscriptionDayOfReminder?: boolean
   /** Hide service names from notification text (default ON). */
   subscriptionHideNames?: boolean
+  /** Default template for new documents; each document stores its own snapshot. */
+  templateLayout?: LayoutId
+  templatePreset?: PresetId
+  templateAccent?: AccentId
   createdAt: number
   updatedAt: number
 }

@@ -118,7 +118,7 @@ function editorOfDraft(draft: NoteDraft): EditorState {
 
 export default function Notebook({ onNavigate }: { onNavigate?: (key: ModuleKey) => void }) {
   const { t, language } = useI18n()
-  const { notes, customers, invoices, projects, addNote, updateNote, deleteNote } = useFatorati()
+  const { notes, customers, invoices, projects, addNote, updateNote, deleteNote, resyncReminders } = useFatorati()
   const [filters, setFilters] = useState<NoteFilters>(DEFAULT_FILTERS)
   const [sort, setSort] = useState<NoteSort>('updated')
   const [editor, setEditor] = useState<EditorState | null>(null)
@@ -194,6 +194,9 @@ export default function Notebook({ onNavigate }: { onNavigate?: (key: ModuleKey)
         if (permission === 'prompt') {
           const next = await requestReminderPermission()
           if (next !== 'granted') setNotice(t('Notification permission is refused. Open the phone settings and allow notifications for Fatorati.'))
+          // Granted in the middle of the save: the plan is rebuilt now, otherwise the
+          // reminder would only appear at the next launch.
+          else void resyncReminders()
         } else if (permission === 'denied') setNotice(t('Notification permission is refused. Open the phone settings and allow notifications for Fatorati.'))
       }
       return true

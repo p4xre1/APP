@@ -8,13 +8,13 @@
 import { create } from 'zustand'
 import { getPreferences } from '../lib/preferences'
 import { DEFAULT_TAX_REGION } from '../lib/taxGuide'
-import { reminderSettings, syncSubscriptionReminders } from '../lib/notifications'
+import { reminderSettings, syncReminders } from '../lib/notifications'
 import { sessionGuard, unlockedSnapshot } from '../lib/vault'
 import { errorText } from '../i18n'
 import * as db from '../lib/db'
 import { generateId } from '../lib/db'
 import type { ImportMode, ImportSummary } from '../lib/backup-format'
-import type { Business, Customer, Project, Invoice, Estimate, Expense, Product, Settings, Subscription } from './types'
+import type { Business, Customer, Project, Invoice, Estimate, Expense, Product, Settings, Subscription, Note } from './types'
 
 interface FatoratiState {
   // Data
@@ -27,6 +27,7 @@ interface FatoratiState {
   products: Product[]
   settings: Settings | null
   subscriptions: Subscription[]
+  notes: Note[]
   
   // UI
   isOnboarded: boolean
@@ -79,7 +80,13 @@ interface FatoratiState {
   addSubscription: (subscription: Omit<Subscription, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Subscription>
   updateSubscription: (id: string, patch: Partial<Subscription>) => Promise<void>
   deleteSubscription: (id: string) => Promise<void>
-  /** Rebuilds the pending local notifications from the current data. */
+  // Notebook
+  loadNotes: () => Promise<void>
+  addNote: (note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Note>
+  updateNote: (id: string, patch: Partial<Note>) => Promise<void>
+  deleteNote: (id: string) => Promise<void>
+
+  /** Rebuilds every pending local notification (notes and subscriptions) from the current data. */
   resyncReminders: () => Promise<{ scheduled: number; cancelled: number; permission: string }>
 
   // Settings
@@ -107,6 +114,7 @@ export const useFatorati = create<FatoratiState>((set, get) => ({
   products: [],
   settings: null,
   subscriptions: [],
+  notes: [],
   isOnboarded: false,
   isLoading: true,
   loadError: null,
@@ -118,7 +126,7 @@ export const useFatorati = create<FatoratiState>((set, get) => ({
       const snapshot = await unlockedSnapshot()
       const business = snapshot.stores.businesses[0] as unknown as Business | undefined
       if (business) {
-        const { customers, projects, invoices, estimates, expenses, products, settings: settingsList, subscriptions } = snapshot.stores
+        const { customers, projects, invoices, estimates, expenses, products, settings: settingsList, subscriptions, notes } = snapshot.stores
         guard()
         set({
           business,
@@ -130,17 +138,18 @@ export const useFatorati = create<FatoratiState>((set, get) => ({
           products: products as unknown as Product[],
           settings: (settingsList[0] as unknown as Settings) || null,
           subscriptions: subscriptions as unknown as Subscription[],
+          notes: notes as unknown as Note[],
           isOnboarded: true,
           isLoading: false,
           loadError: null,
         })
       } else {
-        set({ business: null, customers: [], projects: [], invoices: [], estimates: [], expenses: [], products: [], settings: null, subscriptions: [], isOnboarded: false, isLoading: false, loadError: null })
+        set({ business: null, customers: [], projects: [], invoices: [], estimates: [], expenses: [], products: [], settings: null, subscriptions: [], notes: [], isOnboarded: false, isLoading: false, loadError: null })
       }
     } catch (e) {
       console.error('Failed to init Fatorati:', e)
       // Fail visible: a damaged or locked vault must never look like an empty install.
-      set({ business: null, customers: [], projects: [], invoices: [], estimates: [], expenses: [], products: [], settings: null, subscriptions: [], isOnboarded: false, isLoading: false, loadError: errorText(e) })
+      set({ business: null, customers: [], projects: [], invoices: [], estimates: [], expenses: [], products: [], settings: null, subscriptions: [], notes: [], isOnboarded: false, isLoading: false, loadError: errorText(e) })
     }
   },
 
@@ -182,6 +191,7 @@ export const useFatorati = create<FatoratiState>((set, get) => ({
       expenses: [],
       products: [],
       subscriptions: [],
+      notes: [],
     })
   },
 
@@ -359,10 +369,35 @@ export const useFatorati = create<FatoratiState>((set, get) => ({
     void get().resyncReminders()
   },
 
+  loadNotes: async () => {
+    const notes = await db.getAll<Note>('notes')
+    set({ notes })
+  },
+
+  addNote: async (noteData) => {
+    const note = await db.add<Note>('notes', noteData)
+    set((s) => ({ notes: [note, ...s.notes] }))
+    // A new note can carry a reminder, so the pending set is rebuilt from scratch.
+    void get().resyncReminders()
+    return note
+  },
+
+  updateNote: async (id, patch) => {
+    const updated = await db.update<Note>('notes', id, patch)
+    set((s) => ({ notes: s.notes.map((note) => (note.id === id ? updated : note)) }))
+    void get().resyncReminders()
+  },
+
+  deleteNote: async (id) => {
+    await db.remove('notes', id)
+    set((s) => ({ notes: s.notes.filter((note) => note.id !== id) }))
+    void get().resyncReminders()
+  },
+
   resyncReminders: async () => {
-    const { subscriptions, settings } = get()
+    const { notes, subscriptions, settings } = get()
     try {
-      return await syncSubscriptionReminders(subscriptions, reminderSettings(settings))
+      return await syncReminders(notes, subscriptions, reminderSettings(settings))
     } catch {
       return { scheduled: 0, cancelled: 0, permission: 'unsupported' }
     }

@@ -20,7 +20,7 @@ import { IMAGE_ERRORS, MAX_BACKUP_IMAGE_BYTES, MAX_LOGO_BYTES, MAX_STAMP_BYTES, 
 import { LAYOUTS, PRESETS, TEMPLATE_ACCENTS, templateDefaults, type AccentId, type LayoutId, type PresetId } from '../lib/templates'
 import { APP_VERSION } from '../lib/version'
 import { aboutLinks } from '../lib/appConfig'
-import { Building2, Shield, Info, HelpingHand, ExternalLink, LifeBuoy, CircleHelp, ScrollText, ShieldCheck, ChevronRight, LayoutTemplate, Palette, Stamp, Image as ImageIcon, type LucideIcon } from 'lucide-react'
+import { Building2, Shield, Info, HelpingHand, ExternalLink, LifeBuoy, CircleHelp, ScrollText, ShieldCheck, ChevronRight, LayoutTemplate, Palette, Stamp, Image as ImageIcon, NotebookPen, CalendarDays, type LucideIcon } from 'lucide-react'
 import { ShowTaxAssistantButton } from '../components/TaxAssistant'
 import { assistantVisible, hintsFor, settingsRegion, TAX_DISCLAIMER, TAX_REGION_LABEL, TAX_REGIONS } from '../lib/taxGuide'
 import type { ModuleKey, TaxRegion } from '../store/types'
@@ -389,6 +389,27 @@ export default function Settings({ onNavigate }: { onNavigate?: (key: ModuleKey)
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
         <SubscriptionRemindersPanel />
+
+        <div className={card}>
+          <h2 className="text-[14px] font-bold text-ink mb-4 flex items-center gap-2">
+            <NotebookPen className="w-5 h-5" />{t('Notebook and calendar')}</h2>
+          <div className="space-y-3.5">
+            <p className="text-[12px] text-muted">{t('Ideas, notes and tasks stay encrypted on this phone. A note with a date also appears in the calendar next to due invoices and renewals.')}</p>
+            <div>
+              <label className={label}>{t('Week starts on')}</label>
+              <select aria-label={t('Week starts on')} value={String(prefs.firstDay)} onChange={event => void savePreferences({ firstDay: Number(event.target.value) as 0 | 1 | 6 }).catch(error => void showAlert(errorText(error)))} className={inputClass}>
+                {[1, 6, 0].map(day => <option key={day} value={day}>{t(`firstDay.${day}`)}</option>)}
+              </select>
+              <span className="mt-1 block text-[11.5px] text-muted">{t('The month view follows this, and so does the date picker in expenses.')}</span>
+            </div>
+            <p className="text-[12px] text-muted">{t('A note reminds you only when you choose a reminder on it. Reminders are inexact local notifications, like the subscription ones.')}</p>
+            <p className="text-[12px] text-muted">{t('Notification text never contains a note. Turn "Hide service names in notifications" on to keep every reminder generic.')}</p>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => onNavigate?.('notebook')} className="inline-flex min-h-12 items-center gap-2 rounded-lg bg-canvas px-3.5 py-2 text-[13px] font-medium text-ink"><NotebookPen className="h-4 w-4" aria-hidden="true" />{t('Open the notebook')}</button>
+              <button onClick={() => onNavigate?.('calendar')} className="inline-flex min-h-12 items-center gap-2 rounded-lg bg-canvas px-3.5 py-2 text-[13px] font-medium text-ink"><CalendarDays className="h-4 w-4" aria-hidden="true" />{t('Open the calendar')}</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )

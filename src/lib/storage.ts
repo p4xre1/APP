@@ -15,11 +15,12 @@ export async function openStorage(): Promise<IDBDatabase> {
   return new Promise((resolve,reject) => {
     let blocked = false
     /**
-     * v4 added the subscriptions store; v5 records the document template snapshot
-     * (plain encrypted rows, so no store or index changes). onupgradeneeded only
-     * ever creates what is missing, which is what keeps an old install opening.
+     * v4 added the subscriptions store; v5 records the document template snapshot and
+     * v6 adds the notes store of the notebook (plain encrypted rows, so no index
+     * changes). onupgradeneeded only ever creates what is missing, which is what keeps
+     * an old install opening: the new store starts empty and nothing else is touched.
      */
-    const request = indexedDB.open('fatorati-offline-v1', 5)
+    const request = indexedDB.open('fatorati-offline-v1', 6)
     request.onerror = () => reject(new Error('Storage unavailable'))
     request.onblocked = () => { blocked = true; reject(new Error('Close other app windows')) }
     request.onupgradeneeded = () => {

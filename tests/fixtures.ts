@@ -19,6 +19,11 @@ export function fixture(): FatoratiBackup {
     products: [{ ...base, id: 'product', name: 'Product', description: '', sku: '', unitPrice: 10, unit: 'pc', stock: 3 }],
     settings: [{ ...base, id: 'settings', businessId: 'business', currency: 'EUR', taxRate: 0, invoicePrefix: 'INV', estimatePrefix: 'EST', theme: 'light', language: 'en', taxRegion: 'MA' }],
     subscriptions: [{ ...base, id: 'subscription', serviceName: 'مرصد Service', amountMinor: 9900, currency: 'EUR', billingCycle: 'monthly', autoRenew: true, startDate: '2026-01-31' }],
+    notes: [{
+      ...base, id: 'note', title: 'فكرة Réunion', body: 'Relancer le client sur la maquette', tags: ['client', 'urgent'],
+      pinned: true, archived: false, type: 'task', done: false, color: 'blue', date: '2026-10-05', time: '09:30',
+      remindMinutesBefore: 60, linkedCustomerId: 'customer',
+    }],
   }
 }
 

@@ -23,6 +23,46 @@ export type ModuleKey =
   | 'help' | 'faq' | 'privacy' | 'terms'
   /** Document template picker with the live preview; opened from Settings. */
   | 'templates'
+  /** Notebook of ideas, tasks and notes, with its own quick capture. */
+  | 'notebook'
+  /** Month calendar mixing notes, due invoices, subscriptions and estimate expiry. */
+  | 'calendar'
+
+/** Kind of a notebook entry. An idea can be turned into a task at any time. */
+export type NoteType = 'idea' | 'task' | 'note'
+
+/** Optional colour of a notebook entry; see NOTE_COLORS for the checked palette. */
+export type NoteColorId = 'none' | 'slate' | 'blue' | 'indigo' | 'violet' | 'rose' | 'orange' | 'amber' | 'green' | 'teal'
+
+/**
+ * A notebook entry. The body is plain text and is never rendered as markup.
+ *
+ * `date` is a local calendar date (YYYY-MM-DD) and `time` an optional HH:mm, both
+ * free of time zone shifts; `remindMinutesBefore` is relative to that moment so a
+ * reminder stays correct after a phone changes time zone. A note that points at a
+ * customer, an invoice or a project tolerates that record being deleted later: the
+ * id is kept, the link is simply not shown any more.
+ */
+export interface Note {
+  id: string
+  title?: string
+  body: string
+  color?: NoteColorId
+  tags: string[]
+  pinned: boolean
+  archived: boolean
+  type: NoteType
+  /** Only meaningful for tasks; an idea keeps it false. */
+  done: boolean
+  date?: string
+  time?: string
+  remindMinutesBefore?: number
+  linkedCustomerId?: string
+  linkedInvoiceId?: string
+  linkedProjectId?: string
+  createdAt: number
+  updatedAt: number
+}
 
 /** Billing cadence of a tracked subscription. */
 export type SubscriptionCycle = 'monthly' | 'yearly' | 'one_time_period'

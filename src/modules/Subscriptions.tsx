@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { showAlert, askConfirm } from '../lib/dialogs'
 import { errorText, t, useI18n, usePreferences } from '../i18n'
 import { money } from '../lib/format'
@@ -12,6 +12,7 @@ import {
   validateSubscription, type SubscriptionStatus,
 } from '../lib/subscriptions'
 import { reminderSettings } from '../lib/notifications'
+import { takeIntent } from '../lib/navigation-intent'
 import type { Subscription, SubscriptionCurrency, SubscriptionCycle } from '../store/types'
 
 type Form = {
@@ -157,6 +158,14 @@ export default function Subscriptions() {
         return a.subscription.serviceName.localeCompare(b.subscription.serviceName)
       })
   }, [subscriptions, search, status, category])
+
+  // A row tapped in the calendar leaves its id here; it is consumed exactly once.
+  useEffect(() => {
+    const id = takeIntent('subscriptions')
+    if (!id) return
+    const subscription = subscriptions.find(row => row.id === id)
+    if (subscription) openEdit(subscription)
+  }, [subscriptions])
 
   function openCreate() { setForm(emptyForm(defaultCurrency)); setEditing(null); setShowForm(true) }
   function openEdit(subscription: Subscription) { setForm(formOf(subscription)); setEditing(subscription); setShowForm(true) }

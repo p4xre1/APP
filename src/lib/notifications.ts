@@ -12,8 +12,9 @@ import { LocalNotifications } from '@capacitor/local-notifications'
 import { t } from '../i18n'
 import { formatDate } from './format'
 import { getPreferences, type Language } from './preferences'
-import type { Settings, Subscription } from '../store/types'
+import type { Note, Settings, Subscription } from '../store/types'
 import { DEFAULT_WARN_DAYS, dayNumber, subscribeEndOrRenewal, todayISO, warnDays as clampWarnDays } from './subscriptions'
+import { noteReminderAt, noteTitle } from './notes'
 
 /** Reminders land at 09:00 local time; a fixed hour survives DST shifts. */
 export const REMINDER_HOUR = 9
@@ -22,6 +23,18 @@ export const MAX_REMINDERS = 200
 
 export const HIDDEN_TITLE = 'Subscription reminder'
 export const HIDDEN_BODY = 'A subscription needs your attention'
+export const HIDDEN_NOTE_TITLE = 'Note reminder'
+export const HIDDEN_NOTE_BODY = 'A note needs your attention'
+/** Notes with a reminder use their own channel, so the two can be told apart. */
+export const NOTE_REMINDER_CHANNEL = 'notes'
+/**
+ * Android keeps a limited number of pending alarms per app. The merged set (notes
+ * plus subscriptions) is therefore capped at the soonest 60 and topped up on every
+ * launch, instead of pushing a large backlog into the platform.
+ */
+export const MAX_SCHEDULED_REMINDERS = 60
+/** Longest note title inside a visible notification, so the shade stays readable. */
+export const MAX_NOTIFICATION_TITLE = 60
 
 export interface ReminderSettings {
   enabled: boolean
@@ -123,6 +136,67 @@ export function planReminders(subscriptions: Subscription[], settings: ReminderS
   return plans.sort((a, b) => a.at - b.at).slice(0, MAX_REMINDERS)
 }
 
+/**
+ * Deterministic 32-bit id for a note reminder. The prefix differs from the
+ * subscription one, so the two families can never collide inside the platform's id
+ * space even when a note and a subscription share a record id.
+ */
+export function noteReminderId(noteId: string): number {
+  let hash = 0x811c9dc5
+  const input = `fatorati:note:${noteId}`
+  for (let index = 0; index < input.length; index++) {
+    hash ^= input.charCodeAt(index)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return (hash >>> 0) % 2_147_483_646 + 1
+}
+
+export interface NoteReminderPlan {
+  id: number
+  noteId: string
+  /** Local calendar date the notification fires. */
+  date: string
+  title: string
+  body: string
+  /** Epoch milliseconds for the notification, built in the device's local time. */
+  at: number
+}
+
+/**
+ * Notification text. With "Hide names" on (the default) it is a generic line that
+ * never contains a word of the note. With it off, only the title is shown: the body
+ * of a note is never copied into the notification shade.
+ */
+export function noteReminderText(note: Note, settings: ReminderSettings, language: Language = getPreferences().language): ReminderText {
+  if (settings.hideNames) return { title: t(HIDDEN_NOTE_TITLE, {}, language), body: t(HIDDEN_NOTE_BODY, {}, language) }
+  return { title: noteTitle(note).slice(0, MAX_NOTIFICATION_TITLE) || t('Untitled note', {}, language), body: t(HIDDEN_NOTE_BODY, {}, language) }
+}
+
+/**
+ * Which note reminders should exist right now. A note that is archived, done or has no
+ * reminder chosen produces nothing, and a moment that is already behind us is dropped
+ * unless the note itself is still ahead - then it fires immediately, so a reminder is
+ * never silently lost just because the phone was off.
+ */
+export function planNoteReminders(notes: Note[], settings: ReminderSettings, options: { now?: number; language?: Language } = {}): NoteReminderPlan[] {
+  const now = options.now ?? Date.now()
+  const plans: NoteReminderPlan[] = []
+  for (const note of notes) {
+    if (note.archived === true || note.done === true) continue
+    const at = noteReminderAt(note)
+    if (at === null) continue
+    // The moment the note itself is about: its own time, or 09:00 for a date-only note.
+    const moment = noteReminderAt({ ...note, remindMinutesBefore: 0 })!
+    if (at <= now) {
+      if (moment <= now) continue
+      plans.push({ id: noteReminderId(note.id), noteId: note.id, date: todayISO(now), ...noteReminderText(note, settings, options.language), at: now + 5_000 })
+      continue
+    }
+    plans.push({ id: noteReminderId(note.id), noteId: note.id, date: note.date!, ...noteReminderText(note, settings, options.language), at })
+  }
+  return plans.sort((a, b) => a.at - b.at)
+}
+
 export type ReminderPermission = 'granted' | 'denied' | 'prompt' | 'unsupported'
 
 /** Permission is requested when the user turns reminders on, never at app start. */
@@ -152,39 +226,87 @@ export interface ReminderSyncResult {
   permission: ReminderPermission
 }
 
+/** One scheduled notification, whatever produced it. */
+interface ScheduledReminder {
+  id: number
+  title: string
+  body: string
+  channelId: string
+  at: number
+}
+
 /**
- * Rebuilds the pending reminder set. Every pending notification is cancelled
- * first, so reminders for deleted or cancelled subscriptions disappear, then the
- * current plan is scheduled. Safe to call on launch and after every edit.
+ * Replaces every pending reminder with the given set. The whole app shares this one
+ * path, so switching between the notebook, the calendar and Settings can never leave
+ * a stale alarm behind: everything pending is cancelled first, then the plan is
+ * scheduled with the platform's inexact flag (no exact-alarm permission).
  */
-export async function syncSubscriptionReminders(subscriptions: Subscription[], settings: ReminderSettings, options: { now?: number; language?: Language } = {}): Promise<ReminderSyncResult> {
-  if (!Capacitor.isNativePlatform()) return { scheduled: 0, cancelled: 0, permission: 'unsupported' }
+async function scheduleReminders(reminders: ScheduledReminder[]): Promise<{ scheduled: number; cancelled: number }> {
   let cancelled = 0
   try {
     const pending = await LocalNotifications.getPending()
     const ids = pending.notifications.map(entry => ({ id: entry.id }))
     if (ids.length) { await LocalNotifications.cancel({ notifications: ids }); cancelled = ids.length }
   } catch { /* Nothing pending, or the platform refused the read. */ }
-  if (!settings.enabled) return { scheduled: 0, cancelled, permission: await reminderPermission() }
-  const permission = await reminderPermission()
-  if (permission !== 'granted') return { scheduled: 0, cancelled, permission }
-  const plans = planReminders(subscriptions, settings, options)
-  if (!plans.length) return { scheduled: 0, cancelled, permission }
+  if (!reminders.length) return { scheduled: 0, cancelled }
   try {
     await LocalNotifications.createChannel({ id: REMINDER_CHANNEL, name: t('Subscription reminders'), importance: 3, vibration: false })
+    await LocalNotifications.createChannel({ id: NOTE_REMINDER_CHANNEL, name: t('Note reminders'), importance: 3, vibration: false })
   } catch { /* Channels are Android 8+ only. */ }
   await LocalNotifications.schedule({
-    notifications: plans.map(plan => ({
-      id: plan.id,
-      title: plan.title,
-      body: plan.body,
-      channelId: REMINDER_CHANNEL,
+    notifications: reminders.map(reminder => ({
+      id: reminder.id,
+      title: reminder.title,
+      body: reminder.body,
+      channelId: reminder.channelId,
       // Inexact by design: no SCHEDULE_EXACT_ALARM, no exact-alarm prompt.
       isExactNotification: false,
-      schedule: { at: new Date(plan.at) },
+      schedule: { at: new Date(reminder.at) },
     })),
   })
-  return { scheduled: plans.length, cancelled, permission }
+  return { scheduled: reminders.length, cancelled }
+}
+
+/**
+ * Merged plan: notes with a reminder chosen plus the subscription reminders, sorted by
+ * time and cut to the platform-safe ceiling. A note reminder is a per-note decision,
+ * so it does not depend on the subscription toggle; the subscription reminders still
+ * respect theirs.
+ */
+export function planAllReminders(notes: Note[], subscriptions: Subscription[], settings: ReminderSettings, options: { now?: number; language?: Language } = {}): ScheduledReminder[] {
+  const notes$ = planNoteReminders(notes, settings, options).map(plan => ({ id: plan.id, title: plan.title, body: plan.body, channelId: NOTE_REMINDER_CHANNEL, at: plan.at }))
+  const subscriptions$ = planReminders(subscriptions, settings, options).map(plan => ({ id: plan.id, title: plan.title, body: plan.body, channelId: REMINDER_CHANNEL, at: plan.at }))
+  return [...notes$, ...subscriptions$].sort((a, b) => a.at - b.at).slice(0, MAX_SCHEDULED_REMINDERS)
+}
+
+/**
+ * Rebuilds the pending reminder set. Every pending notification is cancelled first,
+ * so reminders for deleted, archived, done or cancelled entries disappear, then the
+ * current plan is scheduled. Safe to call on launch and after every edit.
+ */
+export async function syncReminders(notes: Note[], subscriptions: Subscription[], settings: ReminderSettings, options: { now?: number; language?: Language } = {}): Promise<ReminderSyncResult> {
+  if (!Capacitor.isNativePlatform()) return { scheduled: 0, cancelled: 0, permission: 'unsupported' }
+  const permission = await reminderPermission()
+  const reminders = permission === 'granted' ? planAllReminders(notes, subscriptions, settings, options) : []
+  const result = await scheduleReminders(reminders)
+  return { ...result, permission }
+}
+
+/**
+ * Subscription-only sync, kept for callers that manage nothing else. It shares the
+ * same cancel-then-schedule path as the merged one.
+ */
+export async function syncSubscriptionReminders(subscriptions: Subscription[], settings: ReminderSettings, options: { now?: number; language?: Language } = {}): Promise<ReminderSyncResult> {
+  if (!Capacitor.isNativePlatform()) return { scheduled: 0, cancelled: 0, permission: 'unsupported' }
+  const permission = await reminderPermission()
+  if (permission !== 'granted') {
+    const empty = await scheduleReminders([])
+    return { ...empty, permission }
+  }
+  const reminders = planReminders(subscriptions, settings, options)
+    .map(plan => ({ id: plan.id, title: plan.title, body: plan.body, channelId: REMINDER_CHANNEL, at: plan.at }))
+  const result = await scheduleReminders(settings.enabled ? reminders : [])
+  return { ...result, permission }
 }
 
 export async function cancelSubscriptionReminders(): Promise<number> {

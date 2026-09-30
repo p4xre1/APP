@@ -1,6 +1,6 @@
 import { Plus, Share2, Pencil, FilePlus2 } from 'lucide-react'
 import { showAlert, askConfirm } from '../lib/dialogs'
-import { Suspense, lazy, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { useFatorati } from '../store/useFatorati'
 import { money, number as formatNumber, documentTotals, lineTotal, formatDate } from '../lib/format'
 import { nextDocumentNumber } from '../lib/fatorati'
@@ -15,6 +15,7 @@ import type { Estimate } from '../store/types'
 import TemplateFields, { LineExtras } from '../components/TemplateFields'
 import { COLUMN_LABEL, PRESETS, documentTemplate, presetIsTaxExempt, presetLabels, presetRateHint, templateColumns, templateDefaults, type DocumentTemplate } from '../lib/templates'
 import { mandatoryFields } from '../lib/template-render'
+import { takeIntent } from '../lib/navigation-intent'
 
 const TemplatePicker = lazy(() => import('./TemplatePicker').then(module => ({ default: module.TemplatePicker })))
 
@@ -54,6 +55,14 @@ export default function Estimates() {
   const preset = PRESETS[form.template.presetId]
   const selectedCustomer = customers.find(c => c.id === form.customerId)
   const missing = mandatoryFields({ region, business, customer: selectedCustomer, template: form.template, paymentMethod: form.paymentMethod, language: form.language || prefs.language }).missing
+
+  // A row tapped in the calendar leaves its id here; it is consumed exactly once.
+  useEffect(() => {
+    const id = takeIntent('estimates')
+    if (!id) return
+    const estimate = estimates.find(row => row.id === id)
+    if (estimate) openEdit(estimate)
+  }, [estimates])
 
   function openCreate() {
     setForm({

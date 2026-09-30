@@ -31,6 +31,8 @@ const HelpCenter = lazy(() => import('./modules/HelpCenter'))
 const Faq = lazy(() => import('./modules/Faq'))
 const LegalDocument = lazy(() => import('./modules/LegalDocument'))
 const TemplatePicker = lazy(() => import('./modules/TemplatePicker'))
+const Notebook = lazy(() => import('./modules/Notebook'))
+const Calendar = lazy(() => import('./modules/Calendar'))
 
 function Fallback() {
   return (
@@ -70,7 +72,7 @@ function LoadFailure({ message, onRetry }: { message: string; onRetry: () => voi
 
 export default function App() {
   useI18n()
-  const { business, isOnboarded, isLoading, loadError, init, completeOnboarding, subscriptions, settings, resyncReminders } = useFatorati()
+  const { business, isOnboarded, isLoading, loadError, init, completeOnboarding, subscriptions, notes, settings, resyncReminders } = useFatorati()
   const [active, setActive] = useState<ModuleKey>('dashboard')
 
   useEffect(() => {
@@ -81,6 +83,9 @@ export default function App() {
   // setting changes, so deleted and cancelled entries never keep firing.
   const reminderKey = JSON.stringify([
     subscriptions.map(row => [row.id, row.updatedAt, row.cancelledAt ?? null, row.startDate, row.billingCycle, row.autoRenew, row.periodMonths ?? null]),
+    // Notes carry their own reminder, so they are part of the same key: editing,
+    // archiving or completing one rebuilds the pending set on the spot.
+    notes.map(row => [row.id, row.updatedAt, row.archived ?? null, row.done ?? null, row.date ?? null, row.time ?? null, row.remindMinutesBefore ?? null]),
     settings?.subscriptionReminders ?? false, settings?.subscriptionWarnDays ?? null,
     settings?.subscriptionDayOfReminder ?? false, settings?.subscriptionHideNames ?? true,
   ])
@@ -122,6 +127,10 @@ export default function App() {
         return <Reports />
       case 'subscriptions':
         return <Subscriptions />
+      case 'notebook':
+        return <Notebook onNavigate={setActive} />
+      case 'calendar':
+        return <Calendar onNavigate={setActive} />
       case 'settings':
         return <Settings onNavigate={setActive} />
       case 'taxGuide':

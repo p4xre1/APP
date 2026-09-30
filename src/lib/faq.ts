@@ -1,3 +1,4 @@
+import { normalizeSearch } from './text-search'
 /**
  * FAQ content: data only, so every answer can be reviewed in one place and the
  * screens stay free of prose. `question` and `answer` are i18n keys: the English
@@ -153,16 +154,8 @@ export const FAQ_ITEMS: FaqItem[] = [
     answer: 'The privacy policy and the terms of use are published in English, French and Arabic. In another language the app shows the English document with a short notice, while the rest of the interface stays translated.' },
 ]
 
-const MARKS = /[\u0300-\u036f\u0610-\u061a\u064b-\u065f\u0670\u06d6-\u06ed\u0640]/g
-
-/** Accent-, case- and diacritic-insensitive, so search works in AR, FR and EN. */
-export function normalizeSearch(value: string): string {
-  return value.normalize('NFKD').replace(MARKS, '')
-    .replace(/[\u0622\u0623\u0625\u0671]/g, '\u0627')
-    .replace(/\u0649/g, '\u064a')
-    .replace(/\u0629/g, '\u0647')
-    .toLowerCase().trim()
-}
+/** Shared with the Notebook: accent-, case- and diacritic-insensitive search. */
+export { normalizeSearch }
 
 /**
  * Filters the FAQ in the language the user is reading. Every word of the query has

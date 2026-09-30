@@ -93,9 +93,11 @@ test('merge adds, updates, skips older/tied IDs in ALL stores, preserving local-
     const rows = incoming[name] as { id: string; updatedAt: number }[]
     rows.push({ ...rows[0], id: `${name}-new` })
   }
-  assert.deepEqual(await importBackup(incoming, 'merge'), { added: 9, updated: 9, skipped: 0 })
-  assert.deepEqual(await importBackup(incoming, 'merge'), { added: 0, updated: 0, skipped: 18 })
-  assert.deepEqual(await importBackup(fixture(), 'merge'), { added: 0, updated: 0, skipped: 9 })
+  // One row per store (ten stores, notes included), each updated by the incoming file.
+  assert.deepEqual(await importBackup(incoming, 'merge'), { added: STORES.length, updated: STORES.length, skipped: 0 })
+  // Ten stores hold two rows each now (the fixture row and the local-only row above).
+  assert.deepEqual(await importBackup(incoming, 'merge'), { added: 0, updated: 0, skipped: STORES.length * 2 })
+  assert.deepEqual(await importBackup(fixture(), 'merge'), { added: 0, updated: 0, skipped: STORES.length })
   const result = await exportBackup()
   for (const name of STORES) {
     assert.equal(result[name].length, 3)

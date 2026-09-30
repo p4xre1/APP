@@ -4,10 +4,14 @@ import type { FatoratiBackup } from './db'
  * 3.1.0 adds the document template snapshot, the item unit/section/discount fields
  * and the seller identifiers; every one of them is optional, so a 3.0.0 file
  * imports unchanged and a document without a snapshot renders the legacy look.
+ *
+ * 3.2.0 adds the `notes` store of the notebook. Older files simply have none: the
+ * migration writes an empty array and every other record is untouched, so an
+ * existing backup still restores exactly the same data.
  */
-export const BACKUP_VERSION = '3.1.0'
+export const BACKUP_VERSION = '3.2.0'
 /** Formats this build can still read. Everything older is migrated up on import. */
-export const SUPPORTED_BACKUP_VERSIONS = ['1.0.0', '2.0.0', '3.0.0', BACKUP_VERSION]
+export const SUPPORTED_BACKUP_VERSIONS = ['1.0.0', '2.0.0', '3.0.0', '3.1.0', BACKUP_VERSION]
 /** Import limits. They bound work before any decrypt or write happens. */
 export const MAX_BACKUP_BYTES = 25 * 1024 * 1024
 export const MAX_RECORDS_PER_STORE = 20_000
@@ -66,6 +70,7 @@ import { DEFAULT_TAX_REGION, isTaxRegion } from './taxGuide'
 import { MAX_BACKUP_IMAGE_BYTES, IMAGE_MIME_TYPES } from './images'
 import { isAccentId, isLayoutId, isPresetId, LEGACY_TEMPLATE } from './templates'
 import { isSubscriptionCurrency, isSubscriptionCycle, isISODate, MAX_PERIOD_MONTHS, warnDays } from './subscriptions'
+import { isNoteColor, isNoteTime, isNoteType, isReminderChoice, MAX_LINK_ID, MAX_NOTE_BODY, MAX_NOTE_TITLE, MAX_TAGS, MAX_TAG_LENGTH } from './notes'
 export type ImportMode = 'replace' | 'merge'
 export interface ImportSummary { added: number; updated: number; skipped: number }
 
@@ -84,12 +89,14 @@ const strings: Record<StoreName, string[]> = {
   products: ['name', 'description', 'sku', 'unit'],
   settings: ['businessId', 'invoicePrefix', 'estimatePrefix'],
   subscriptions: ['serviceName', 'currency', 'billingCycle', 'startDate'],
+  notes: ['body'],
 }
 const numbers: Record<StoreName, string[]> = {
   businesses: [], customers: ['balance'], projects: ['budget'],
   invoices: ['subtotal', 'tax', 'total'], estimates: ['subtotal', 'tax', 'total'],
   expenses: ['amount'], products: ['unitPrice', 'stock'], settings: ['taxRate'],
   subscriptions: ['amountMinor'],
+  notes: [],
 }
 const enums: Partial<Record<StoreName, Record<string, string[]>>> = {
   projects: { status: ['planning', 'active', 'on_hold', 'done'] },
@@ -97,6 +104,30 @@ const enums: Partial<Record<StoreName, Record<string, string[]>>> = {
   estimates: { status: ['draft', 'sent', 'accepted', 'declined'] },
   settings: { theme: ['light', 'dark', 'system'], language: [...languages] },
   subscriptions: { currency: ['MAD', 'USD', 'EUR'], billingCycle: ['monthly', 'yearly', 'one_time_period'] },
+}
+
+/**
+ * A notebook record, field by field. Everything is checked before the import opens a
+ * write transaction: an out-of-range reminder, an unknown colour, a time without a
+ * date or a tag list over the cap rejects the whole file, so the vault can never
+ * receive a note the editor itself would refuse to produce.
+ */
+function validateNoteRecord(record: Record<string, unknown>): void {
+  const invalid = () => new Error('Invalid backup record; no data was changed')
+  if ((record.body as string).length > MAX_NOTE_BODY) throw invalid()
+  if (!isNoteType(record.type) || typeof record.pinned !== 'boolean' || typeof record.archived !== 'boolean' || typeof record.done !== 'boolean') throw invalid()
+  if (record.title !== undefined && (typeof record.title !== 'string' || !record.title.trim() || record.title.length > MAX_NOTE_TITLE)) throw invalid()
+  if (record.color !== undefined && !isNoteColor(record.color)) throw invalid()
+  if (!Array.isArray(record.tags) || record.tags.length > MAX_TAGS) throw invalid()
+  for (const tag of record.tags) {
+    if (typeof tag !== 'string' || !tag.trim() || tag.length > MAX_TAG_LENGTH) throw invalid()
+  }
+  if (record.date !== undefined && !isISODate(record.date)) throw invalid()
+  if (record.time !== undefined && (!isNoteTime(record.time) || !isISODate(record.date))) throw invalid()
+  if (record.remindMinutesBefore !== undefined && (!isReminderChoice(record.remindMinutesBefore) || !isISODate(record.date))) throw invalid()
+  for (const key of ['linkedCustomerId', 'linkedInvoiceId', 'linkedProjectId'] as const) {
+    if (record[key] !== undefined && (typeof record[key] !== 'string' || !(record[key] as string).trim() || (record[key] as string).length > MAX_LINK_ID)) throw invalid()
+  }
 }
 
 /** Validate everything before opening a write transaction. Legacy unencrypted v1 files remain valid. */
@@ -159,6 +190,7 @@ export function validateBackup(value: unknown): asserts value is FatoratiBackup 
         }
         for (const key of ['logo', 'stamp']) if (record[key] !== undefined && !isStoredImage(record[key])) throw invalid()
       }
+      if (name === 'notes') validateNoteRecord(record)
       if (name === 'invoices' || name === 'estimates') {
         if (record.template !== undefined && !isTemplateSnapshot(record.template)) throw invalid()
         if (record.paymentMethod !== undefined && (typeof record.paymentMethod !== 'string' || record.paymentMethod.length > MAX_ITEM_TEXT_LENGTH)) throw invalid()
@@ -302,6 +334,8 @@ export function migrateBackup(input: unknown): FatoratiBackup {
   }
   // 2.0.0 -> 3.0.0: the subscriptions store is new, so older files simply have none.
   if (value.subscriptions === undefined) (value as Record<string, unknown>).subscriptions = []
+  // 3.1.0 -> 3.2.0: same for the notebook; a file with notes keeps them untouched.
+  if (value.notes === undefined) (value as Record<string, unknown>).notes = []
   // 3.0.0 -> 3.1.0: a document written before templates existed gets the snapshot it
   // already renders as - classic layout, general preset, template version 1, the app
   // accent, no logo. Writing it down is what stops a later Settings change from moving
@@ -332,5 +366,6 @@ export function normalizeRecord(name: StoreName, source: Record<string,unknown>,
   if(name==='invoices'||name==='estimates') {
     row.items = (row.items as Record<string,unknown>[]).map(item=>({...item,unitPrice:roundMoney(item.unitPrice as number,currency),total:roundMoney((item.quantity as number)*roundMoney(item.unitPrice as number,currency),currency)}))
   }
+  // A note holds no amount at all, so there is nothing to quantize for it.
   return row
 }

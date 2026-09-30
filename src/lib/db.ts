@@ -1,8 +1,9 @@
-import type { Business, Customer, Project, Invoice, Estimate, Expense, Product, Settings, Subscription } from '../store/types'
-export type { Business, Customer, Project, Invoice, InvoiceItem, Estimate, Expense, Product, Settings, Subscription } from '../store/types'
+import type { Business, Customer, Project, Invoice, Estimate, Expense, Product, Settings, Subscription, Note } from '../store/types'
+export type { Business, Customer, Project, Invoice, InvoiceItem, Estimate, Expense, Product, Settings, Subscription, Note } from '../store/types'
 import { BACKUP_VERSION, MAX_BACKUP_BYTES, migrateBackup, normalizeRecord, encodeBackup, decodeBackup } from './backup-format'
 import type { ImportMode, ImportSummary } from './backup-format'
 import { STORES, type StoreName } from './schema'
+import { normalizeNote } from './notes'
 import { commit, exclusive, type CipherRecord, type PlainRecord, type Snapshot } from './storage'
 import { unlockedSnapshot, encryptRecord, sessionGuard, isUnlocked, readMeta, cachedStore, cacheAfterCommit, dropCache } from './vault'
 import { shareFile } from './share-file'
@@ -15,6 +16,7 @@ export interface FatoratiBackup {
   businesses: Business[]; customers: Customer[]; projects: Project[]; invoices: Invoice[]
   estimates: Estimate[]; expenses: Expense[]; products: Product[]; settings: Settings[]
   subscriptions: Subscription[]
+  notes: Note[]
 }
 export async function getAll<T>(name: StoreName): Promise<T[]> { return (await unlockedSnapshot()).stores[name] as unknown as T[] }
 function normalize(name:StoreName, source:Record<string,unknown>) {
@@ -24,6 +26,8 @@ function normalize(name:StoreName, source:Record<string,unknown>) {
     row.language ||= prefs.language; row.occurredAt ||= row.createdAt; row.pdfColor ??= prefs.pdfColor
   }
   if(row.exchangeRate !== undefined && (typeof row.exchangeRate !== 'number' || !Number.isFinite(row.exchangeRate) || row.exchangeRate <= 0)) throw new Error('Invalid amount')
+  // The notebook store is text only: no currency, no document fields to complete.
+  if(name === 'notes') return normalizeRecord(name,normalizeNote(row),prefs.defaultCurrency) as PlainRecord
   return normalizeRecord(name,row,prefs.defaultCurrency) as PlainRecord
 }
 /**

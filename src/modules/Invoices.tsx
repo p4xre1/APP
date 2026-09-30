@@ -8,7 +8,7 @@ import { getPreferences } from '../lib/preferences'
 import { shareInvoicePdf } from '../lib/invoice-pdf'
 import type { Invoice } from '../store/types'
 import ExportCsvButton from '../components/ExportCsvButton'
-import { Suspense, lazy, useMemo, useState } from 'react'
+import { useEffect, Suspense, lazy, useMemo, useState } from 'react'
 import { useFatorati } from '../store/useFatorati'
 import { nextDocumentNumber } from '../lib/fatorati'
 import { assistantRegion, assistantStartsOpen, assistantVisible, hintsFor, settingsRegion, TAX_REGION_LABEL } from '../lib/taxGuide'
@@ -16,6 +16,7 @@ import { Plus, Download, Share2, X, Pencil, Search } from 'lucide-react'
 import TemplateFields, { LineExtras, type FormLine } from '../components/TemplateFields'
 import { COLUMN_LABEL, PRESETS, documentTemplate, presetIsTaxExempt, presetLabels, presetRateHint, templateColumns, templateDefaults, type DocumentTemplate } from '../lib/templates'
 import { mandatoryFields } from '../lib/template-render'
+import { takeIntent } from '../lib/navigation-intent'
 
 const TemplatePicker = lazy(() => import('./TemplatePicker').then(module => ({ default: module.TemplatePicker })))
 
@@ -78,6 +79,14 @@ export default function Invoices() {
   // reported here, never silently dropped.
   const missing = mandatoryFields({ region, business, customer: selectedCustomer, template: form.template, paymentMethod: form.paymentMethod, language: form.language || prefs.language }).missing
   const markAssistantSeen = () => { if (settings?.taxAssistantSeen !== true) void updateSettings({ taxAssistantSeen: true }).catch(() => undefined) }
+
+  // A row tapped in the calendar leaves its id here; it is consumed exactly once.
+  useEffect(() => {
+    const id = takeIntent('invoices')
+    if (!id) return
+    const invoice = invoices.find(row => row.id === id)
+    if (invoice) openEdit(invoice)
+  }, [invoices])
 
   function openCreate() {
     setForm(emptyForm({

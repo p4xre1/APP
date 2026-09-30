@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react'
 import { Download, Upload } from 'lucide-react'
 import { useFatorati } from '../store/useFatorati'
 import { loadBackupFile } from '../lib/db'
-import { PasswordRequiredError } from '../lib/backup-format'
+import { PasswordRequiredError, MIN_PASSWORD_LENGTH } from '../lib/backup-format'
 import type { ImportMode } from '../lib/backup-format'
 import { useLastBackup } from '../lib/useLastBackup'
 
@@ -36,6 +36,7 @@ export default function BackupPanel() {
 
   async function handleExport() {
     if (!password) { setMessage(t("A backup password is required while app lock is enabled")); return }
+    if (password.length < MIN_PASSWORD_LENGTH) { setMessage(t("Backup password is too short")); return }
     if (password !== confirmation) { setMessage(t("Export passwords do not match.")); return }
     setBusy(true); setMessage('')
     try {

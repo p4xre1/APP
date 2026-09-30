@@ -4,6 +4,8 @@ export interface CipherRecord { id: string; encrypted: 1; iv: string; ciphertext
 export interface PlainRecord { id: string; createdAt: number; updatedAt: number; [field: string]: unknown }
 export interface VaultMeta {
   id: 'security'; revision: number; salt?: string; verifier?: string; keyId?: string
+  /** PBKDF2 cost the verifier was derived with. Absent on older installs. */
+  iterations?: number
   failures: number; blockedUntil: number; biometric: boolean
   pendingPreferences?: DisplayPreferences
 }

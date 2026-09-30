@@ -1,8 +1,91 @@
 # Fatorati 2 — Android offline
 
-Capacitor 7, React, Vite, pnpm. App ID: `com.fatorati.app`. No accounts, analytics, remote translation, cloud SDKs, rate services, PWA, service workers, or runtime network features. The Android app does **not declare INTERNET**. Android automatic backups and device extraction are excluded. Sharing is an explicit handoff to an app the user chooses; the receiving app can use its own connection.
+Capacitor 8, React 19, Vite 8, pnpm. App ID: `com.fatorati.app`. Version 2.1.0. No accounts, analytics, remote translation, cloud SDKs, rate services, PWA, service workers, or runtime network features. The Android app does **not declare INTERNET**. Android automatic backups and device extraction are excluded. Sharing is an explicit handoff to an app the user chooses; the receiving app can use its own connection.
 
 **Your data lives only on this phone. Uninstalling the app deletes it. Export a backup regularly.**
+
+## Invoicing workflow (2.1.0)
+
+- **Invoice lifecycle**: `draft → sent → paid → overdue`, changeable from the
+  list. Marking an invoice paid stores a payment date (`paidAt`, UTC
+  milliseconds) that is shown in the list, on the PDF and used as the revenue
+  month in the dashboard charts. Revenue counts paid invoices, pending counts
+  sent ones, and the dashboard now shows the document counts behind each metric.
+- **Tax**: a per-document tax rate (percent) applied on top of the rounded
+  subtotal, plus a default rate in Settings → "Document numbering and tax". Tax
+  is calculated with integer minor-unit arithmetic (`JPY` 0, `USD` 2, `KWD` 3
+  decimals), rounded half away from zero. Business and customer tax numbers
+  (VAT/CR/TRN) appear in the PDF header blocks, and Reports shows tax collected
+  per currency plus a document count by status. Applying a different currency to
+  an existing document re-rounds every amount to that currency.
+- **Numbering**: `PREFIX-YYYY-0001` sequences derived from the documents already
+  stored, so numbers never repeat inside one install, deleted numbers are not
+  reused and both prefixes are editable (Settings → "Document numbering and
+  tax"). The next number is previewed in the create form.
+- **Editing everywhere**: customers, products, projects, expenses, estimates and
+  invoices can all be edited after creation; estimates can be deleted, converted
+  into a draft invoice, and moved through `draft → sent → accepted → declined`.
+  Every delete asks for confirmation, and every list has search (invoices also
+  have a status filter).
+- **Recovery screen**: if the vault cannot be read, the app shows an explicit
+  error with Retry/Lock instead of the onboarding wizard, so a damaged database
+  is never mistaken for a fresh install. "Reset app" now completes even if a
+  native plugin fails, and always erases the records.
+- **Performance**: decrypted records are cached for the current unlock session
+  and only changed records are re-encrypted, so a one-record edit no longer
+  re-encrypts the whole store. The cache is dropped on lock and every commit
+  still verifies the stored revision, so stale data can never overwrite newer
+  data written by another WebView.
+- **Import limits**: 25 MB file cap, 20 000 records per store, 500 lines per
+  document, 10 000 characters per text field, importable PBKDF2 cost between
+  10 000 and 5 000 000 iterations, and a minimum backup-password length of 8
+  characters (enforced in the UI and in `encodeBackup`).
+- **Staged exports**: plaintext CSV/PDF/backup files are staged in the app cache
+  only long enough to be handed to the share sheet, then removed at the next app
+  start and after each unlock, with a "Clear temporary files" action in
+  Settings → Security showing how many files are staged.
+
+
+## Tax assistant (offline guidance)
+
+The assistant is bundled guidance for invoices and tax. It is static data in
+`src/lib/taxGuide.ts` (translated in all five dictionaries), so it needs no
+network, no INTERNET permission and no relaxation of the shipped
+`connect-src 'none'` policy.
+
+- **Where it lives**: a collapsible panel above the tax fields of the invoice and
+  estimate forms, one-line hints next to the tax fields themselves, and a
+  full-screen **Tax guide** page opened from Settings → Tax assistant.
+- **Region switch**: a "Morocco | United States" segmented control at the top of
+  the assistant. It defaults to the region configured in Settings and switching
+  it changes **only the guidance you read** — the region used for documents is
+  untouched until you press "Use this region for new invoices" (or change it in
+  Settings).
+- **Show / hide**: Settings → Tax assistant has an on/off toggle (default on) and
+  the panel has a close button. While hidden, a small "Show tax assistant"
+  button appears in Settings and on the invoice and estimate forms; nothing else
+  in the app shows the panel. The panel opens expanded the first time it is seen
+  and starts collapsed afterwards.
+- **Persistence**: `taxRegion`, `taxAssistantRegion`, `taxAssistantVisible` and
+  `taxAssistantSeen` live in the encrypted settings store (with the rest of the
+  vault), so they are encrypted at rest and travel with an encrypted backup.
+  Regions from other apps or older backups are ignored rather than trusted.
+- **Morocco**: TVA 20% standard and 10% reduced, 0%/exempt for exports and exempt
+  items, the 7% and 14% rates removed on 1 January 2026 (valid only for invoices
+  dated before that), the Art. 145 CGI content checklist (IF, TP, RC, 15-digit
+  ICE, sequential gap-free numbering, per-rate TVA amounts, payment method), the
+  auto-entrepreneur case (no TVA under 500,000 DH with the "TVA non applicable"
+  mention plus ICE, IF, TP and CNIE), the e-invoicing principle in Art. 145-IX
+  and the deduction risk of a missing or wrong ICE or IF.
+- **United States**: no federal sales tax, state rates plus local city/county
+  rates that vary by address, nexus and economic-nexus thresholds, exemption and
+  resale certificates, invoice content, the difference between sales tax and
+  income tax (1099-NEC/W-9), and 3–7 year record keeping.
+- **Honest about what is unknown**: the e-invoicing timeline and thresholds are
+  not stated as fact ("Check the DGI website for the current status"), and every
+  region carries a visible **Last reviewed: 2026-09-30** date plus a
+  "general information, not tax advice" disclaimer.
+
 
 ## First run, PIN and recovery
 
@@ -19,7 +102,13 @@ Create and confirm a six-digit PIN **before any business data is rendered**. Exi
 
 ### Biometric compatibility and boundaries
 
-`@capgo/capacitor-native-biometric` is pinned to **7.6.0**. Before installation, its npm metadata was checked: peer dependency `@capacitor/core >=7.0.0`, development dependencies on Capacitor 7. Its shipped Android Gradle file uses SDK 35 / minimum 23 and Android Gradle Plugin 8.7.2, matching this project.
+`@capgo/capacitor-native-biometric` is pinned to **8.7.0** (Capacitor 8). Version
+**8.3.6 is the first release that fixes the authentication-bypass advisory
+GHSA-vx5f-vmr6-32wf**, where the plugin's `onAuthenticationSucceeded()` ignored
+the `CryptoObject`; any 7.x or < 8.3.6 build is affected, so the dependency is
+always kept at the patched line. `pnpm audit` reports no known vulnerabilities
+(a `uuid` override pins a transitive, dev-only CLI dependency to a patched
+release).
 
 Enabling biometrics requires the app PIN and a successful native prompt. A copy of the derived **data key, never the PIN**, is kept in the plugin's Android Keystore-encrypted credential storage. Native authentication is required before retrieving it. The app PIN remains the fallback; device-passcode fallback in the plugin is disabled. The plugin uses its own authentication Activity, so returning from a successful native prompt creates a fresh session only after returning to the foreground. PIN changes disable old biometric enrollment/key identifiers; enroll again afterward.
 
@@ -67,19 +156,35 @@ An import uses one transaction spanning **all eight stores plus metadata**, stro
 
 The last-backup Preferences date records successful share handoff, not proof of delivery. Failed/canceled shares reported by Capacitor do not reset it; CSV/PDF/imports do not either. The dashboard reminds after seven days or when no backup has been recorded. Native exports use unique Cache folders and FileProvider; only non-native test/browser execution uses `<a download>`.
 
+## License and compliance files
+
+Fatorati is **proprietary software** — see `LICENSE` (all rights reserved: no
+copying, redistribution, modification, store distribution or F-Droid packaging
+without written permission). Bundled third-party components are listed in
+`NOTICE.md` (Capacitor MIT, the biometric plugin MPL-2.0, OFL fonts with their
+license texts in `public/fonts/`). User-facing policies live in `PRIVACY.md`
+(no data collected, no network permission, uninstall deletes everything) and
+`SECURITY.md` (disclosure process, threat model, what the app does not protect
+against). Complete Google Play Data safety answers are listed in `PRIVACY.md`.
+
+
 ## Development/build
 
-Requirements: Node 22+, pnpm 10.34.3, **Java 21**, Android SDK platform 35/build tools. Configure `ANDROID_HOME` or `android/local.properties`. Build dependencies may require a network connection; the installed app does not.
+Requirements: Node 22+, pnpm 10.34.3, **Java 21**, Android SDK platform 36/build tools (AGP 8.13.0, Gradle 8.14.3, minSdk 24, target/compile SDK 36). Configure `ANDROID_HOME` or `android/local.properties`. Build dependencies may require a network connection; the installed app does not.
 
 ```sh
 pnpm install
 pnpm exec tsc --noEmit
-pnpm test
+pnpm test          # 47 Node tests: security, backup, tax, numbering, limits
 pnpm build
 pnpm cap:sync android
 cd android
 ./gradlew assembleDebug --stacktrace
 ```
+
+`pnpm dev` starts the Vite dev server with a development-only CSP relaxation
+(the shipped `index.html` keeps `connect-src 'none'`); `pnpm build` output is
+unchanged by it. `pnpm preview` serves the production bundle locally.
 
 APK path: `android/app/build/outputs/apk/debug/app-debug.apk`. The retained GitHub Android workflow uses Java 21 and fail-fast install/typecheck/tests/build/sync/Gradle steps. No retries or failure suppression.
 

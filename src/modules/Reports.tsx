@@ -9,7 +9,7 @@ export default function Reports() {
 
   const { t } = useI18n(), prefs = usePreferences()
   const result = reportTotals(invoices, expenses, prefs.defaultCurrency)
-  const rows = result.totals.length ? result.totals : [{currency:prefs.defaultCurrency,revenue:0,pending:0,expenses:0,profit:0}]
+  const rows = result.totals.length ? result.totals : [{currency:prefs.defaultCurrency,revenue:0,pending:0,expenses:0,tax:0,counts:{paid:0,sent:0,overdue:0,draft:0,total:0},profit:0}]
 
   return (
     <div className="space-y-6">
@@ -19,7 +19,7 @@ export default function Reports() {
       </div>
 
       {rows.map(row => {
-        const { currency, revenue:totalRevenue, pending:pendingRevenue, expenses:totalExpenses, profit } = row
+        const { currency, revenue:totalRevenue, pending:pendingRevenue, expenses:totalExpenses, tax:totalTax, counts, profit } = row
         const currencyInvoices = invoices.filter(inv => (inv.currency || prefs.defaultCurrency) === currency)
         const currencyExpenses = expenses.filter(exp => (exp.currency || prefs.defaultCurrency) === currency)
         return <Fragment key={currency}>
@@ -51,6 +51,14 @@ export default function Reports() {
           <div className="flex justify-between py-2 border-b border-line">
             <span className="text-[13px] text-muted">{t('Expenses')}</span>
             <span className="text-[13px] font-medium text-serious">-{money(totalExpenses,currency)}</span>
+          </div>
+          <div className="flex justify-between py-2 border-b border-line">
+            <span className="text-[13px] text-muted">{t('Tax collected')}</span>
+            <span className="text-[13px] font-medium text-ink">{money(totalTax,currency)}</span>
+          </div>
+          <div className="flex justify-between py-2 border-b border-line">
+            <span className="text-[13px] text-muted">{t('Documents by status')}</span>
+            <span className="text-[13px] font-medium text-ink">{t('draft',{})} {number(counts.draft)} · {t('sent')} {number(counts.sent)} · {t('paid')} {number(counts.paid)} · {t('overdue')} {number(counts.overdue)}</span>
           </div>
           <div className="flex justify-between py-3 font-bold text-lg">
             <span>{t('Net Profit')}</span>

@@ -42,21 +42,26 @@ export async function shareInvoicePdf(invoice: Invoice | Estimate, business: Bus
     y += lineHeight
   }
   reset()
+  const rate = Number(invoice.taxRate) || 0
   const content = [
     `${tr('expiryDate' in invoice ? 'Estimate' : 'Invoice')} ${invoice.number}`, '',
     business?.name || tr('Your Business'), business?.ownerName || '',
     `${business?.address || ''} ${business?.city || ''}`,
-    `${business?.phone || ''} ${business?.email || ''}`, '',
+    `${business?.phone || ''} ${business?.email || ''}`,
+    business?.taxNumber ? `${tr('Tax number')}: ${business.taxNumber}` : '', '',
     tr('Customer'), customer?.name || invoice.customerId,
     `${customer?.address || ''} ${customer?.city || ''}`,
-    `${customer?.email || ''} ${customer?.phone || ''}`, '',
+    `${customer?.email || ''} ${customer?.phone || ''}`,
+    customer?.taxNumber ? `${tr('Tax number')}: ${customer.taxNumber}` : '', '',
     `${tr('Date and time')}: ${formatDate(invoice.occurredAt||invoice.createdAt,true,language)}`,
     `${tr('Issue date')}: ${formatDate(invoice.issueDate,false,language)}`,
     `${tr('expiryDate' in invoice?'Expiry date':'Due date')}: ${formatDate('expiryDate' in invoice?invoice.expiryDate:invoice.dueDate,false,language)}`,
     `${tr('Status')}: ${tr(invoice.status)}`, '', tr('Items'),
     ...invoice.items.flatMap(item => [item.description, `${number(item.quantity,language)} × ${money(item.unitPrice,currency,false,language)} = ${money(item.total,currency,false,language)}`, '']),
-    `${tr('Subtotal')}: ${money(invoice.subtotal,currency,false,language)}`, `${tr('Tax')}: ${money(invoice.tax,currency,false,language)}`,
-    `${tr('Total')}: ${money(invoice.total,currency,false,language)}`, '', tr('Notes'), invoice.notes,
+    `${tr('Subtotal')}: ${money(invoice.subtotal,currency,false,language)}`,
+    `${tr('Tax')}${rate ? ` ${number(rate,language)}%` : ''}: ${money(invoice.tax,currency,false,language)}`,
+    `${tr('Total')}: ${money(invoice.total,currency,false,language)}`,
+    'paidAt' in invoice && invoice.paidAt ? `${tr('Paid on')}: ${formatDate(invoice.paidAt,false,language)}` : '', '', tr('Notes'), invoice.notes,
   ].join('\n')
   // Wrap long descriptions/notes and add pages instead of clipping invoices.
   for (const paragraph of content.split(/\r?\n/)) {

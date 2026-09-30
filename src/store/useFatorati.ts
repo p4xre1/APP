@@ -7,11 +7,13 @@
 
 import { create } from 'zustand'
 import { getPreferences } from '../lib/preferences'
-import { sessionGuard } from '../lib/vault'
+import { DEFAULT_TAX_REGION } from '../lib/taxGuide'
+import { sessionGuard, unlockedSnapshot } from '../lib/vault'
+import { errorText } from '../i18n'
 import * as db from '../lib/db'
 import { generateId } from '../lib/db'
 import type { ImportMode, ImportSummary } from '../lib/backup-format'
-import type { Business, Customer, Project, Invoice, Estimate, Expense, Product, Settings, DashboardStats } from './types'
+import type { Business, Customer, Project, Invoice, Estimate, Expense, Product, Settings } from './types'
 
 interface FatoratiState {
   // Data
@@ -27,6 +29,8 @@ interface FatoratiState {
   // UI
   isOnboarded: boolean
   isLoading: boolean
+  /** Set when records exist but cannot be read. Never treated as "no data". */
+  loadError: string | null
   
   // Business
   setBusiness: (business: Business) => Promise<void>
@@ -94,35 +98,37 @@ export const useFatorati = create<FatoratiState>((set, get) => ({
   settings: null,
   isOnboarded: false,
   isLoading: true,
+  loadError: null,
 
   init: async () => {
     const guard = sessionGuard()
-    set({ isLoading: true })
+    set({ isLoading: true, loadError: null })
     try {
-      const snapshot = await db.exportBackup()
-      const business = snapshot.businesses[0]
+      const snapshot = await unlockedSnapshot()
+      const business = snapshot.stores.businesses[0] as unknown as Business | undefined
       if (business) {
-        const { customers, projects, invoices, estimates, expenses, products, settings: settingsList } = snapshot
+        const { customers, projects, invoices, estimates, expenses, products, settings: settingsList } = snapshot.stores
         guard()
         set({
           business,
-          customers,
-          projects,
-          invoices,
-          estimates,
-          expenses,
-          products,
-          settings: settingsList[0] || null,
+          customers: customers as unknown as Customer[],
+          projects: projects as unknown as Project[],
+          invoices: invoices as unknown as Invoice[],
+          estimates: estimates as unknown as Estimate[],
+          expenses: expenses as unknown as Expense[],
+          products: products as unknown as Product[],
+          settings: (settingsList[0] as unknown as Settings) || null,
           isOnboarded: true,
           isLoading: false,
+          loadError: null,
         })
       } else {
-        set({ business: null, customers: [], projects: [], invoices: [], estimates: [], expenses: [], products: [], settings: null, isOnboarded: false, isLoading: false })
+        set({ business: null, customers: [], projects: [], invoices: [], estimates: [], expenses: [], products: [], settings: null, isOnboarded: false, isLoading: false, loadError: null })
       }
     } catch (e) {
       console.error('Failed to init Fatorati:', e)
-      guard()
-      set({ isLoading: false })
+      // Fail visible: a damaged or locked vault must never look like an empty install.
+      set({ business: null, customers: [], projects: [], invoices: [], estimates: [], expenses: [], products: [], settings: null, isOnboarded: false, isLoading: false, loadError: errorText(e) })
     }
   },
 
@@ -145,6 +151,8 @@ export const useFatorati = create<FatoratiState>((set, get) => ({
       estimatePrefix: 'EST',
       theme: getPreferences().theme,
       language: getPreferences().language,
+      taxRegion: DEFAULT_TAX_REGION,
+      taxAssistantVisible: true,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     }

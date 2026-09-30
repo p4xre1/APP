@@ -15,9 +15,15 @@ export type ModuleKey =
   | 'products'
   | 'reports'
   | 'settings'
+  /** Full-screen tax guide; opened from Settings, not part of the sidebar. */
+  | 'taxGuide'
+
+/** Country whose invoice and tax guidance the assistant shows. */
+export type TaxRegion = 'MA' | 'US'
 
 export interface Business {
   currency?: string
+  taxNumber?: string
   id: string
   name: string
   ownerName: string
@@ -31,6 +37,7 @@ export interface Business {
 }
 
 export interface Customer {
+  taxNumber?: string
   id: string
   name: string
   email: string
@@ -64,6 +71,8 @@ export interface InvoiceItem {
 }
 
 export interface Invoice {
+  taxRate?: number // Percent applied to the subtotal; absent/0 means no tax.
+  paidAt?: number // UTC milliseconds when the invoice was marked paid.
   currency?: string
   language?: Language
   exchangeRate?: number // Default-currency units for one unit of this currency.
@@ -87,6 +96,7 @@ export interface Invoice {
 }
 
 export interface Estimate {
+  taxRate?: number
   currency?: string
   language?: Language
   exchangeRate?: number // Default-currency units for one unit of this currency.
@@ -148,15 +158,14 @@ export interface Settings {
   estimatePrefix: string
   theme: 'light' | 'dark' | 'system'
   language: Language
+  /** Region used for new documents. Absent on installs created before the tax assistant. */
+  taxRegion?: TaxRegion
+  /** Tax assistant visibility. Absent means visible (the default). */
+  taxAssistantVisible?: boolean
+  /** Region shown inside the assistant; switching there never changes taxRegion. */
+  taxAssistantRegion?: TaxRegion
+  /** Set after the assistant has been shown once, so it then starts collapsed. */
+  taxAssistantSeen?: boolean
   createdAt: number
   updatedAt: number
-}
-
-export interface DashboardStats {
-  totalCustomers: number
-  totalInvoices: number
-  totalRevenue: number
-  pendingInvoices: number
-  overdueInvoices: number
-  totalExpenses: number
 }

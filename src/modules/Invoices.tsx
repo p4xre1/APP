@@ -1,76 +1,154 @@
-import { showAlert } from '../lib/dialogs'
-import { number } from '../lib/format'
-import { t } from '../i18n'
-import DocumentOptions from '../components/DocumentOptions'
+import { showAlert, askConfirm } from '../lib/dialogs'
+import { number, documentTotals, lineTotal, money, formatDate } from '../lib/format'
+import { t, useI18n, usePreferences, errorText } from '../i18n'
+import DocumentOptions, { type DocumentPreferences } from '../components/DocumentOptions'
+import TaxAssistantPanel, { ShowTaxAssistantButton } from '../components/TaxAssistant'
+import NumberInput from '../components/NumberInput'
 import { getPreferences } from '../lib/preferences'
-import { roundMoney, sumMoney, formatDate } from '../lib/format'
-import { errorText } from '../i18n'
 import { shareInvoicePdf } from '../lib/invoice-pdf'
 import type { Invoice } from '../store/types'
 import ExportCsvButton from '../components/ExportCsvButton'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useFatorati } from '../store/useFatorati'
-import { money, generateInvoiceNumber } from '../lib/fatorati'
-import { Plus, Download, Share2, X } from 'lucide-react'
+import { nextDocumentNumber } from '../lib/fatorati'
+import { assistantRegion, assistantStartsOpen, assistantVisible, hintsFor, TAX_REGION_LABEL } from '../lib/taxGuide'
+import { Plus, Download, Share2, X, Pencil, Search } from 'lucide-react'
+
+type Line = { description: string; quantity: number; unitPrice: number }
+type Status = Invoice['status']
+const STATUSES: Status[] = ['draft', 'sent', 'paid', 'overdue']
+
+function emptyForm(defaults: { currency: string; language: Invoice['language']; pdfColor: boolean; taxRate: number }) {
+  const today = new Date().toISOString().slice(0, 10)
+  return {
+    currency: defaults.currency,
+    language: defaults.language,
+    pdfColor: defaults.pdfColor,
+    exchangeRate: undefined as number | undefined,
+    rateCurrency: undefined as string | undefined,
+    taxRate: defaults.taxRate,
+    customerId: '',
+    items: [{ description: '', quantity: 1, unitPrice: 0 }] as Line[],
+    notes: '',
+    issueDate: today,
+    dueDate: new Date(Date.now() + 30 * 86400_000).toISOString().slice(0, 10),
+  }
+}
 
 export default function Invoices() {
-  const { invoices, customers, business, settings, addInvoice, deleteInvoice, updateInvoice } = useFatorati()
-  const [showAdd, setShowAdd] = useState(false)
-  const [form, setForm] = useState({
-    currency: getPreferences().defaultCurrency, language: getPreferences().language, pdfColor: getPreferences().pdfColor, exchangeRate: undefined as number | undefined, rateCurrency: undefined as string | undefined,
-    customerId: '',
-    items: [{ description: '', quantity: 1, unitPrice: 0 }],
-    notes: '',
-  })
+  const { t: tr } = useI18n()
+  const prefs = usePreferences()
+  const { invoices, customers, business, settings, addInvoice, deleteInvoice, updateInvoice, updateSettings } = useFatorati()
+  const [showForm, setShowForm] = useState(false)
+  const [editing, setEditing] = useState<Invoice | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [search, setSearch] = useState('')
+  const [filter, setFilter] = useState<'all' | Status>('all')
+  const [form, setForm] = useState(() => emptyForm({ currency: getPreferences().defaultCurrency, language: getPreferences().language, pdfColor: getPreferences().pdfColor, taxRate: settings?.taxRate || 0 }))
+  const inputClass = 'w-full px-3 py-2 border border-line-strong rounded-lg text-[13.5px] bg-surface text-ink outline-none transition-colors placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-brand/15'
 
-  function calculateTotal() {
-    const subtotal = sumMoney(form.items.map(item=>roundMoney(item.quantity * roundMoney(item.unitPrice,form.currency), form.currency)), form.currency)
-    return { subtotal, tax: 0, total: subtotal }
+  const prefix = settings?.invoicePrefix || 'INV'
+  const nextNumber = useMemo(
+    () => nextDocumentNumber(invoices.map(row => row.number), prefix, 'INV'),
+    [invoices, prefix],
+  )
+  const totals = documentTotals(form.items, form.taxRate, form.currency)
+  const assistant = assistantVisible(settings)
+  const region = assistantRegion(settings)
+  const hints = hintsFor(region)
+  const selectedCustomer = customers.find(c => c.id === form.customerId)
+  const markAssistantSeen = () => { if (settings?.taxAssistantSeen !== true) void updateSettings({ taxAssistantSeen: true }).catch(() => undefined) }
+
+  function openCreate() {
+    setForm(emptyForm({ currency: prefs.defaultCurrency, language: prefs.language, pdfColor: prefs.pdfColor, taxRate: settings?.taxRate || 0 }))
+    setEditing(null); setShowForm(true)
   }
-
-  async function handleAdd() {
-    try {
-    if (!form.customerId || form.items.length === 0) return
-    const { subtotal, tax, total } = calculateTotal()
-    
-    const items = form.items.map(item => ({
-      id: Math.random().toString(36).slice(2),
-      description: item.description,
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      total: item.quantity * item.unitPrice,
-    }))
-
-    await addInvoice({
-      number: generateInvoiceNumber('INV'),
-      currency: form.currency, language: form.language, pdfColor: form.pdfColor, exchangeRate: form.exchangeRate, rateCurrency: form.rateCurrency,
-      customerId: form.customerId,
-      items,
-      subtotal,
-      tax,
-      total,
-      status: 'draft',
-      issueDate: new Date().toISOString().split('T')[0],
-      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      notes: form.notes,
+  function openEdit(invoice: Invoice) {
+    setForm({
+      currency: invoice.currency || prefs.defaultCurrency,
+      language: invoice.language || prefs.language,
+      pdfColor: invoice.pdfColor ?? prefs.pdfColor,
+      exchangeRate: invoice.exchangeRate,
+      rateCurrency: invoice.rateCurrency,
+      taxRate: invoice.taxRate || 0,
+      customerId: invoice.customerId,
+      items: invoice.items.map(item => ({ description: item.description, quantity: item.quantity, unitPrice: item.unitPrice })),
+      notes: invoice.notes,
+      issueDate: invoice.issueDate,
+      dueDate: invoice.dueDate,
     })
-    
-    setForm({ ...form, customerId: '', items: [{ description: '', quantity: 1, unitPrice: 0 }], notes: '' })
-    setShowAdd(false)
-    } catch (error) { showAlert(errorText(error)) }
+    setEditing(invoice); setShowForm(true)
+  }
+  function closeForm() { setShowForm(false); setEditing(null) }
+
+  async function save() {
+    if (!form.customerId) { await showAlert(tr('Select a customer first')); return }
+    const items = form.items.filter(item => item.description.trim())
+    if (!items.length) { await showAlert(tr('Add at least one item')); return }
+    setBusy(true)
+    try {
+      const { subtotal, tax, total } = documentTotals(items, form.taxRate, form.currency)
+      const payload = {
+        currency: form.currency, language: form.language, pdfColor: form.pdfColor,
+        exchangeRate: form.exchangeRate, rateCurrency: form.rateCurrency, taxRate: form.taxRate,
+        customerId: form.customerId,
+        items: items.map(item => ({
+          id: crypto.randomUUID(),
+          description: item.description.trim(),
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          total: lineTotal(item.quantity, item.unitPrice, form.currency),
+        })),
+        subtotal, tax, total,
+        issueDate: form.issueDate, dueDate: form.dueDate, notes: form.notes,
+      }
+      if (editing) {
+        // Item identities are regenerated above, so keep the stored ones when the lines match.
+        const keptItems = payload.items.map((item, index) => ({ ...item, id: editing.items[index]?.id || item.id }))
+        await updateInvoice(editing.id, { ...payload, items: keptItems })
+      } else {
+        await addInvoice({ ...payload, number: nextNumber, status: 'draft' })
+      }
+      closeForm()
+    } catch (error) { await showAlert(errorText(error)) } finally { setBusy(false) }
   }
 
-  const [sharing, setSharing] = useState(false)
-  async function handleShare(invoice: Invoice) {
-    setSharing(true)
+  /** Changing the document currency must re-round every amount to that currency. */
+  async function updateOptions(invoice: Invoice, patch: DocumentPreferences) {
+    try {
+      const currency = patch.currency || invoice.currency || prefs.defaultCurrency
+      const totals = documentTotals(invoice.items, invoice.taxRate || 0, currency)
+      await updateInvoice(invoice.id, { ...patch, currency, ...totals })
+    } catch (error) { await showAlert(errorText(error)) }
+  }
+
+  async function changeStatus(invoice: Invoice, status: Status) {
+    try {
+      await updateInvoice(invoice.id, { status, paidAt: status === 'paid' ? (invoice.paidAt || Date.now()) : undefined })
+    } catch (error) { await showAlert(errorText(error)) }
+  }
+
+  async function remove(invoice: Invoice) {
+    if (!await askConfirm(tr('Delete invoice {number}? This cannot be undone.', { number: invoice.number }))) return
+    try { await deleteInvoice(invoice.id) } catch (error) { await showAlert(errorText(error)) }
+  }
+
+  async function share(invoice: Invoice) {
+    setBusy(true)
     try {
       await shareInvoicePdf(invoice, business, customers.find(c => c.id === invoice.customerId), invoice.currency || settings?.currency)
     } catch (error) {
-      showAlert(t('PDF share not completed') + ': ' + (errorText(error)))
-    } finally { setSharing(false) }
+      await showAlert(tr('PDF share not completed') + ': ' + errorText(error))
+    } finally { setBusy(false) }
   }
 
-  const { subtotal, total } = calculateTotal()
+  const visible = invoices.filter(invoice => {
+    if (filter !== 'all' && invoice.status !== filter) return false
+    if (!search.trim()) return true
+    const customer = customers.find(row => row.id === invoice.customerId)?.name || ''
+    const needle = search.trim().toLowerCase()
+    return invoice.number.toLowerCase().includes(needle) || customer.toLowerCase().includes(needle)
+  })
 
   return (
     <div className="space-y-6">
@@ -79,21 +157,24 @@ export default function Invoices() {
           <h1 className="text-[20px] font-bold tracking-tight text-ink">{t("Invoices")}</h1>
           <p className="text-[13px] text-muted mt-1">{number(invoices.length)} {t("invoices • Create invoice → PDF → Share")}</p>
         </div>
-        <button onClick={() => setShowAdd(true)} className="bg-brand hover:bg-brand-700 text-white px-3.5 py-2 rounded-lg flex items-center gap-2 text-[13px] font-semibold transition-all active:scale-[0.98] disabled:opacity-40 shadow-sm">
+        <button onClick={openCreate} className="bg-brand hover:bg-brand-700 text-white px-3.5 py-2 rounded-lg flex items-center gap-2 text-[13px] font-semibold transition-all active:scale-[0.98] disabled:opacity-40 shadow-sm">
           <Plus className="w-4 h-4" />{t("New Invoice")}</button>
       </div>
 
       <ExportCsvButton store="invoices" />
 
-      {showAdd && (
+      {showForm && (
         <div className="bg-surface rounded-xl border border-line p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-          <h2 className="font-semibold text-ink mb-4">{t("Create Invoice")}</h2>
-          <DocumentOptions value={form} onChange={patch=>setForm({...form,...patch})} />
-          
-          <div className="space-y-4">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-semibold text-ink">{editing ? t('Edit invoice') + ` ${editing.number}` : t('Create Invoice')}</h2>
+            {!editing && <span className="text-[12px] text-muted">{t('Next number')}: <span className="font-semibold text-ink">{nextNumber}</span>{assistant && <span className="ms-2 text-faint">{t(hints.documentNumber)}</span>}</span>}
+          </div>
+          <DocumentOptions value={form} onChange={patch => setForm({ ...form, ...patch })} />
+
+          <div className="mt-4 space-y-4">
             <div>
               <label className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t("Customer *")}</label>
-              <select aria-label={t('Customer')} value={form.customerId} onChange={e => setForm({...form, customerId: e.target.value})} className="w-full px-3 py-2 border border-line-strong rounded-lg text-[13.5px] bg-surface text-ink outline-none transition-colors placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-brand/15">
+              <select aria-label={t('Customer')} value={form.customerId} onChange={e => setForm({ ...form, customerId: e.target.value })} className={inputClass}>
                 <option value="">{t("Select customer")}</option>
                 {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
@@ -103,91 +184,127 @@ export default function Invoices() {
               <label className="block text-[13px] font-medium text-ink mb-2">{t("Items")}</label>
               {form.items.map((item, idx) => (
                 <div key={idx} className="grid grid-cols-12 gap-2 mb-2">
-                  <input placeholder={t("Description")} value={item.description} onChange={e => {
-                    const newItems = [...form.items]
-                    newItems[idx].description = e.target.value
-                    setForm({...form, items: newItems})
-                  }} className="col-span-6 px-3 py-2 border border-line-strong rounded-lg text-[13.5px] bg-surface text-ink outline-none transition-colors placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-brand/15" />
-                  <input type="number" placeholder={t("Qty")} value={item.quantity} onChange={e => {
-                    const newItems = [...form.items]
-                    newItems[idx].quantity = parseFloat(e.target.value) || 0
-                    setForm({...form, items: newItems})
-                  }} className="col-span-2 px-3 py-2 border border-line-strong rounded-lg text-[13.5px] bg-surface text-ink outline-none transition-colors placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-brand/15" />
-                  <input type="number" placeholder={t("Price")} value={item.unitPrice} onChange={e => {
-                    const newItems = [...form.items]
-                    newItems[idx].unitPrice = parseFloat(e.target.value) || 0
-                    setForm({...form, items: newItems})
-                  }} className="col-span-3 px-3 py-2 border border-line-strong rounded-lg text-[13.5px] bg-surface text-ink outline-none transition-colors placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-brand/15" />
-                  <button onClick={() => {
-                    setForm({...form, items: form.items.filter((_, i) => i !== idx)})
-                  }} aria-label={t("Remove item")} className="col-span-1 text-serious text-[13px]"><X className="w-4 h-4 mx-auto" /></button>
+                  <input aria-label={t('Description')} placeholder={t("Description")} value={item.description} onChange={e => {
+                    const items = [...form.items]; items[idx] = { ...item, description: e.target.value }; setForm({ ...form, items })
+                  }} className={`col-span-6 ${inputClass}`} />
+                  <NumberInput aria-label={t('Qty')} placeholder={t("Qty")} value={item.quantity} onChange={quantity => {
+                    const items = [...form.items]; items[idx] = { ...item, quantity }; setForm({ ...form, items })
+                  }} className={`col-span-2 ${inputClass}`} />
+                  <NumberInput aria-label={t('Price')} placeholder={t("Price")} value={item.unitPrice} onChange={unitPrice => {
+                    const items = [...form.items]; items[idx] = { ...item, unitPrice }; setForm({ ...form, items })
+                  }} className={`col-span-3 ${inputClass}`} />
+                  <button onClick={() => setForm({ ...form, items: form.items.filter((_, i) => i !== idx) })} aria-label={t("Remove item")} className="col-span-1 text-serious text-[13px]"><X className="w-4 h-4 mx-auto" /></button>
                 </div>
               ))}
-              <button onClick={() => setForm({...form, items: [...form.items, { description: '', quantity: 1, unitPrice: 0 }]})} className="text-[13px] text-brand hover:text-brand-700">{t("+ Add item")}</button>
+              <button onClick={() => setForm({ ...form, items: [...form.items, { description: '', quantity: 1, unitPrice: 0 }] })} className="text-[13px] text-brand hover:text-brand-700">{t("+ Add item")}</button>
             </div>
 
-            <div className="bg-canvas p-4 rounded-lg">
-              <div className="flex justify-between text-[13px]">
-                <span>{t("Subtotal:")}</span>
-                <span className="font-medium">{money(subtotal,form.currency)}</span>
-              </div>
-              <div className="flex justify-between text-[13px] font-bold mt-2 pt-2 border-t">
-                <span>{t("Total:")}</span>
-                <span>{money(total,form.currency)}</span>
-              </div>
+            {assistant ? (
+              <TaxAssistantPanel
+                region={region}
+                onRegionChange={next => void updateSettings({ taxAssistantRegion: next }).catch(() => undefined)}
+                onApplyRegion={next => { void updateSettings({ taxRegion: next, taxAssistantRegion: next }).catch(() => undefined) }}
+                onHide={() => void updateSettings({ taxAssistantVisible: false }).catch(() => undefined)}
+                startOpen={assistantStartsOpen(settings)}
+                onFirstView={markAssistantSeen}
+              />
+            ) : (
+              <ShowTaxAssistantButton onShow={() => void updateSettings({ taxAssistantVisible: true }).catch(() => undefined)} />
+            )}
+
+            {assistant && !editing && (
+              <p className="text-[12px] text-muted">{t('{region} guidance is on for this form.', { region: t(TAX_REGION_LABEL[region]) })}</p>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <label className="block">
+                <span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t('Tax rate')} (%)</span>
+                <NumberInput aria-label={t('Tax rate')} value={form.taxRate} onChange={taxRate => setForm({ ...form, taxRate: Math.min(taxRate, 1000) })} className={inputClass} />
+                {assistant && <span className="mt-1 block text-[11.5px] text-muted">{t(hints.taxRate)}</span>}
+              </label>
+              <label className="block">
+                <span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t("Issue date")}</span>
+                <input type="date" value={form.issueDate} onChange={e => setForm({ ...form, issueDate: e.target.value })} className={inputClass} />
+              </label>
+              <label className="block">
+                <span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t("Due date")}</span>
+                <input type="date" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} className={inputClass} />
+              </label>
+              {region === 'MA' && (
+                <label className="block sm:col-span-3">
+                  <span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t('Client ICE')}</span>
+                  <input aria-label={t('Client ICE')} value={selectedCustomer?.taxNumber || ''} readOnly placeholder={t('Stored with the selected customer')} className={`${inputClass} bg-canvas`} />
+                  {assistant && <span className={`mt-1 block text-[11.5px] ${selectedCustomer && !selectedCustomer.taxNumber ? 'text-warn' : 'text-muted'}`}>{t(selectedCustomer && !selectedCustomer.taxNumber ? hints.customerTaxMissing : hints.customerTax)}</span>}
+                </label>
+              )}
+            </div>
+
+            <div className="bg-canvas p-4 rounded-lg space-y-2">
+              <div className="flex justify-between text-[13px]"><span>{t("Subtotal:")}</span><span className="font-medium">{money(totals.subtotal, form.currency, false, form.language)}</span></div>
+              <div className="flex justify-between text-[13px]"><span>{t("Tax")} {form.taxRate ? `(${number(form.taxRate)}%)` : ''}:</span><span className="font-medium">{money(totals.tax, form.currency, false, form.language)}</span></div>
+              <div className="flex justify-between text-[13px] font-bold pt-2 border-t border-line"><span>{t("Total:")}</span><span>{money(totals.total, form.currency, false, form.language)}</span></div>
             </div>
 
             <div>
               <label className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t("Notes")}</label>
-              <textarea value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} placeholder={t("Thank you for your business!")} className="w-full px-3 py-2 border border-line-strong rounded-lg text-[13.5px] bg-surface text-ink outline-none transition-colors placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-brand/15" rows={3} />
+              <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder={t("Thank you for your business!")} className={inputClass} rows={3} />
             </div>
           </div>
 
           <div className="flex gap-2 mt-6">
-            <button onClick={handleAdd} className="bg-brand text-white px-6 py-2 rounded-lg text-[13px] font-semibold transition-all active:scale-[0.98] disabled:opacity-40 shadow-sm">{t("Create Invoice")}</button>
-            <button onClick={() => setShowAdd(false)} className="bg-canvas text-ink px-6 py-2 rounded-lg text-[13px]">{t("Cancel")}</button>
+            <button disabled={busy} onClick={() => void save()} className="bg-brand text-white px-6 py-2 rounded-lg text-[13px] font-semibold transition-all active:scale-[0.98] disabled:opacity-40 shadow-sm">{editing ? t('Save changes') : t("Create Invoice")}</button>
+            <button disabled={busy} onClick={closeForm} className="bg-canvas text-ink px-6 py-2 rounded-lg text-[13px]">{t("Cancel")}</button>
           </div>
         </div>
       )}
 
+      <div className="bg-surface rounded-xl border border-line p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-1 min-w-[12rem] items-center gap-2 bg-canvas rounded-lg px-3 py-2">
+            <Search className="w-4 h-4 text-faint" />
+            <input type="text" aria-label={t('Search invoices...')} placeholder={t("Search invoices...")} value={search} onChange={e => setSearch(e.target.value)} className="flex-1 bg-transparent outline-none text-[13.5px]" />
+          </div>
+          <select aria-label={t('Status')} value={filter} onChange={e => setFilter(e.target.value as 'all' | Status)} className={inputClass + ' w-auto'}>
+            <option value="all">{t('All')}</option>
+            {STATUSES.map(status => <option key={status} value={status}>{t(status)}</option>)}
+          </select>
+        </div>
+      </div>
+
       <div className="bg-surface rounded-xl border border-line overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-        {invoices.length === 0 ? (
+        {visible.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-muted text-[13px]">{t("No invoices yet")}</p>
-            <p className="text-[12px] text-faint mt-1">{t("Create your first invoice → PDF → Share")}</p>
+            <p className="text-muted text-[13px]">{invoices.length ? t("No results") : t("No invoices yet")}</p>
+            {!invoices.length && <p className="text-[12px] text-faint mt-1">{t("Create your first invoice → PDF → Share")}</p>}
           </div>
         ) : (
           <div className="divide-y divide-line">
-            {invoices.map((invoice) => {
+            {visible.map((invoice) => {
               const customer = customers.find(c => c.id === invoice.customerId)
               return (
                 <div key={invoice.id} className="p-4 hover:bg-canvas">
-                  <div className="flex items-center justify-between">
-                    <div>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
                       <p className="font-medium text-[13px] text-ink">{invoice.number}</p>
-                      <details className="mt-2"><summary className="text-[12px] cursor-pointer">{t('Document options')}</summary><DocumentOptions value={invoice} onChange={patch=>void updateInvoice(invoice.id,patch).catch(e=>showAlert(errorText(e)))}/></details>
-                      <p className="text-[12px] text-muted mt-0.5">{customer?.name || t("Unknown")} • {formatDate(invoice.occurredAt || invoice.createdAt,true,invoice.language)}</p>
-                      <span className={`inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full ${
-                        invoice.status === 'paid' ? 'bg-good-50 text-emerald-700' :
-                        invoice.status === 'sent' ? 'bg-brand-100 text-brand-700' :
-                        'bg-canvas text-ink'
-                      }`}>
-                        {t(invoice.status)}
-                      </span>
+                      <p className="text-[12px] text-muted mt-0.5">{customer?.name || t("Unknown")} • {formatDate(invoice.occurredAt || invoice.createdAt, true, invoice.language)}</p>
+                      {invoice.status === 'paid' && invoice.paidAt && <p className="text-[12px] text-emerald-700 mt-0.5">{t('Paid on')} {formatDate(invoice.paidAt, false, invoice.language)}</p>}
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="text-end me-2">
-                        <p className="font-bold text-[13px] text-ink">{money(invoice.total,invoice.currency,false,invoice.language)}</p>
+                      <div className="text-end me-1">
+                        <p className="font-bold text-[13px] text-ink">{money(invoice.total, invoice.currency, false, invoice.language)}</p>
+                        {!!invoice.tax && <p className="text-[11.5px] text-muted">{t('Tax')} {money(invoice.tax, invoice.currency, false, invoice.language)}</p>}
                       </div>
-                      <button disabled={sharing} onClick={() => handleShare(invoice)} className="p-2 hover:bg-canvas rounded-lg" title={t("Download PDF")}>
-                        <Download className="w-4 h-4 text-muted" />
-                      </button>
-                      <button disabled={sharing} onClick={() => handleShare(invoice)} className="p-2 hover:bg-canvas rounded-lg" title={t("Share")}>
-                        <Share2 className="w-4 h-4 text-muted" />
-                      </button>
-                      <button onClick={() => deleteInvoice(invoice.id)} className="text-[12px] text-serious hover:text-serious px-2 py-1">{t("Delete")}</button>
+                      <select aria-label={`${t('Status')} ${invoice.number}`} value={invoice.status} onChange={e => void changeStatus(invoice, e.target.value as Status)} className={`text-[12px] rounded-lg border border-line-strong bg-surface px-2 py-1 ${invoice.status === 'paid' ? 'text-emerald-700' : invoice.status === 'overdue' ? 'text-serious' : 'text-ink'}`}>
+                        {STATUSES.map(status => <option key={status} value={status}>{t(status)}</option>)}
+                      </select>
+                      {invoice.status !== 'paid' && <button onClick={() => void changeStatus(invoice, 'paid')} className="text-[12px] px-2 py-1 rounded-lg bg-good-50 text-emerald-700 font-semibold">{t('Mark as paid')}</button>}
+                      <button disabled={busy} onClick={() => openEdit(invoice)} title={t('Edit')} aria-label={`${t('Edit')} ${invoice.number}`} className="p-2 hover:bg-canvas rounded-lg"><Pencil className="w-4 h-4 text-muted" /></button>
+                      <button disabled={busy} onClick={() => void share(invoice)} title={t("Download PDF")} aria-label={`${t('Download PDF')} ${invoice.number}`} className="p-2 hover:bg-canvas rounded-lg"><Download className="w-4 h-4 text-muted" /></button>
+                      <button disabled={busy} onClick={() => void share(invoice)} title={t("Share")} aria-label={`${t('Share')} ${invoice.number}`} className="p-2 hover:bg-canvas rounded-lg"><Share2 className="w-4 h-4 text-muted" /></button>
+                      <button onClick={() => void remove(invoice)} className="text-[12px] text-serious hover:text-serious px-2 py-1">{t("Delete")}</button>
                     </div>
                   </div>
+                  <details className="mt-2"><summary className="text-[12px] cursor-pointer text-muted">{t('Document options')}</summary><div className="mt-3"><DocumentOptions value={invoice} onChange={patch => void updateOptions(invoice, patch)} /></div></details>
                 </div>
               )
             })}

@@ -1,11 +1,20 @@
 import type { FatoratiBackup } from './db'
 
 export const BACKUP_VERSION = '2.0.0'
+/** Import limits. They bound work before any decrypt or write happens. */
+export const MAX_BACKUP_BYTES = 25 * 1024 * 1024
+export const MAX_RECORDS_PER_STORE = 20_000
+export const MAX_ITEMS_PER_DOCUMENT = 500
+export const MAX_TEXT_LENGTH = 10_000
+export const MIN_PASSWORD_LENGTH = 8
+export const MIN_BACKUP_ITERATIONS = 10_000
+export const MAX_BACKUP_ITERATIONS = 5_000_000
 import { STORES, type StoreName } from './schema'
 export { STORES } from './schema'
 export type { StoreName } from './schema'
 import { defaultPreferences, validPreferences, validCurrency, languages } from './preferences'
 import { roundMoney } from './format'
+import { isTaxRegion } from './taxGuide'
 export type ImportMode = 'replace' | 'merge'
 export interface ImportSummary { added: number; updated: number; skipped: number }
 
@@ -47,14 +56,25 @@ export function validateBackup(value: unknown): asserts value is FatoratiBackup 
   for (const name of STORES) {
     const records = value[name]
     if (!Array.isArray(records)) throw new Error('Invalid backup structure')
+    if (records.length > MAX_RECORDS_PER_STORE) throw new Error('Backup contains too many records')
     const ids = new Set<string>()
     for (const record of records) {
       const invalid = () => new Error('Invalid backup record; no data was changed')
       if (!object(record) || typeof record.id !== 'string' || !record.id.trim() || ids.has(record.id)
         || !timestamp(record.createdAt) || !timestamp(record.updatedAt)) throw invalid()
       ids.add(record.id)
-      if (strings[name].some(key => typeof record[key] !== 'string')
+      if (strings[name].some(key => typeof record[key] !== 'string' || (record[key] as string).length > MAX_TEXT_LENGTH)
         || numbers[name].some(key => !finite(record[key]))) throw invalid()
+      if (record.taxRate !== undefined && !(finite(record.taxRate) && record.taxRate >= 0 && record.taxRate <= 1000)) throw invalid()
+      if (record.paidAt !== undefined && !timestamp(record.paidAt)) throw invalid()
+      if (record.taxNumber !== undefined && (typeof record.taxNumber !== 'string' || record.taxNumber.length > 64)) throw invalid()
+      if (name === 'settings') {
+        if (record.taxRegion !== undefined && !isTaxRegion(record.taxRegion)) throw invalid()
+        if (record.taxAssistantRegion !== undefined && !isTaxRegion(record.taxAssistantRegion)) throw invalid()
+        for (const key of ['taxAssistantVisible', 'taxAssistantSeen']) {
+          if (record[key] !== undefined && typeof record[key] !== 'boolean') throw invalid()
+        }
+      }
       for (const [key, choices] of Object.entries(enums[name] || {})) {
         if (!choices.includes(record[key] as string)) throw invalid()
       }
@@ -69,7 +89,7 @@ export function validateBackup(value: unknown): asserts value is FatoratiBackup 
         : name === 'invoices' || name === 'estimates' ? ['projectId'] : []
       if (optional.some(key => record[key] !== undefined && typeof record[key] !== 'string')) throw invalid()
       if (name === 'invoices' || name === 'estimates') {
-        if (!Array.isArray(record.items)) throw invalid()
+        if (!Array.isArray(record.items) || record.items.length > MAX_ITEMS_PER_DOCUMENT) throw invalid()
         const itemIds = new Set<string>()
         for (const item of record.items) {
           if (!object(item) || typeof item.id !== 'string' || !item.id.trim() || itemIds.has(item.id)
@@ -122,8 +142,9 @@ async function deriveKey(password: string, salt: Uint8Array<ArrayBuffer>): Promi
 
 export async function encodeBackup(backup: FatoratiBackup, password = ''): Promise<string> {
   validateBackup(backup)
-  const json = JSON.stringify(backup, (key, value) => ['createdAt','updatedAt','occurredAt','exportedAt'].includes(key) && typeof value === 'number' ? new Date(value).toISOString() : value)
+  const json = JSON.stringify(backup, (key, value) => ['createdAt','updatedAt','occurredAt','exportedAt','paidAt'].includes(key) && typeof value === 'number' ? new Date(value).toISOString() : value)
   if (!password) return json
+  if (password.length < MIN_PASSWORD_LENGTH) throw new Error('Backup password is too short')
   const salt = crypto.getRandomValues(new Uint8Array(16))
   const iv = crypto.getRandomValues(new Uint8Array(12))
   const key = await deriveKey(password, salt)
@@ -141,7 +162,8 @@ export async function decodeBackup(text: string, password?: string): Promise<Fat
   catch { throw new Error('Invalid backup: the file is not valid JSON.') }
   if (object(value) && value.format === 'fatorati-encrypted') {
     if (value.version !== 1 || value.algorithm !== 'AES-GCM' || value.kdf !== 'PBKDF2-SHA256'
-      || value.iterations !== ITERATIONS || typeof value.salt !== 'string'
+      || !finite(value.iterations) || value.iterations < MIN_BACKUP_ITERATIONS || value.iterations > MAX_BACKUP_ITERATIONS
+      || typeof value.salt !== 'string'
       || typeof value.iv !== 'string' || typeof value.ciphertext !== 'string') {
       throw new Error('Unsupported or damaged encrypted backup header.')
     }
@@ -165,7 +187,7 @@ export async function decodeBackup(text: string, password?: string): Promise<Fat
 export function migrateBackup(input: unknown): FatoratiBackup {
   if (!object(input) || !['1.0.0', BACKUP_VERSION].includes(input.version as string)) throw new Error('Unsupported backup version')
   const value = JSON.parse(JSON.stringify(input), (key, item) => {
-    if (['createdAt','updatedAt','occurredAt','exportedAt'].includes(key) && typeof item === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(item)) return Date.parse(item)
+    if (['createdAt','updatedAt','occurredAt','exportedAt','paidAt'].includes(key) && typeof item === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(item)) return Date.parse(item)
     return item
   }) as Record<string, unknown>
   if(value.version === '1.0.0') {
@@ -183,6 +205,7 @@ export function migrateBackup(input: unknown): FatoratiBackup {
         if(['invoices','estimates','expenses'].includes(name)) {
           row.language = settings?.language || 'en'; row.occurredAt = row.createdAt; row.pdfColor = true
         }
+        if(name === 'invoices' || name === 'estimates') row.taxRate ??= 0
       }
     }
     value.version = BACKUP_VERSION
@@ -196,6 +219,11 @@ export function normalizeRecord(name: StoreName, source: Record<string,unknown>,
   const row = {...source}, currency = (row.currency as string) || defaultCurrency
   if(!validCurrency(currency)) throw new Error('Invalid currency')
   for(const field of numbers[name]) if(['balance','budget','subtotal','tax','total','amount','unitPrice'].includes(field) && typeof row[field] === 'number') row[field] = roundMoney(row[field],currency)
+  if((name === 'invoices' || name === 'estimates') && row.taxRate !== undefined) {
+    const rate = Number(row.taxRate)
+    if(!Number.isFinite(rate) || rate < 0 || rate > 1000) throw new Error('Invalid tax rate')
+    row.taxRate = Math.round(rate * 1e6) / 1e6
+  }
   if(name==='invoices'||name==='estimates') {
     row.items = (row.items as Record<string,unknown>[]).map(item=>({...item,unitPrice:roundMoney(item.unitPrice as number,currency),total:roundMoney((item.quantity as number)*roundMoney(item.unitPrice as number,currency),currency)}))
   }

@@ -34,19 +34,19 @@ const { decodeBackup } = await import('../src/lib/backup-format')
 beforeEach(async () => { lockVault(); globalThis.indexedDB = new IDBFactory(); await createOrChangePin('123456'); calls.length = 0; failure = null; preferences.clear() })
 
 test('native backup writes UTF-8 .fatorati to Cache, shares the returned URI, then records date', async () => {
-  await downloadBackupFile(fixture(), 'secret')
+  await downloadBackupFile(fixture(), 'long-enough-secret')
   assert.deepEqual(calls.map(c => `${c.plugin}.${c.method}`), ['Filesystem.writeFile', 'Share.share', 'Preferences.set'])
   const write = calls[0].options
   assert.equal(write.directory, 'CACHE')
   assert.equal(write.encoding, 'utf8')
   assert.match(write.path as string, /^exports\/[^/]+\/fatorati-backup-\d{4}-\d{2}-\d{2}\.fatorati$/)
-  assert.deepEqual(await decodeBackup(write.data as string, 'secret'), fixture())
+  assert.deepEqual(await decodeBackup(write.data as string, 'long-enough-secret'), fixture())
   assert.deepEqual(calls[1].options, { url: `file:///cache/${write.path}` })
   assert.ok((await getLastBackupDate())! > 0)
 })
 
 test('encrypted native export never writes plaintext to cache', async () => {
-  await downloadBackupFile(fixture(), 'secret')
+  await downloadBackupFile(fixture(), 'long-enough-secret')
   const data = calls[0].options.data as string
   assert.equal(JSON.parse(data).format, 'fatorati-encrypted')
   assert.ok(!data.includes('متجر Café'))
@@ -56,7 +56,7 @@ for (const plugin of ['Filesystem', 'Share']) {
   test(`${plugin} failure or cancellation preserves previous backup date and does not fall back`, async () => {
     preferences.set(LAST_BACKUP_KEY, '123')
     failure = plugin
-    await assert.rejects(downloadBackupFile(fixture(), 'secret'))
+    await assert.rejects(downloadBackupFile(fixture(), 'long-enough-secret'))
     assert.equal(preferences.get(LAST_BACKUP_KEY), '123')
     assert.ok(!calls.some(c => c.plugin === 'Preferences'))
     if (plugin === 'Filesystem') assert.ok(!calls.some(c => c.plugin === 'Share'))

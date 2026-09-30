@@ -92,8 +92,8 @@ network, no INTERNET permission and no relaxation of the shipped
 Fatorati can now track what leaves the account on a recurring basis: streaming,
 hosting, insurance, rent, a licence. It is the same offline architecture as the
 rest of the app — no INTERNET permission, the shipped CSP untouched, and the
-records live in the encrypted vault (`subscriptions` is a ninth store inside the
-same database and the same transaction).
+records live in the encrypted vault (`subscriptions` is a store inside the same
+database and the same transaction).
 
 - **Data**: service name, category, amount (stored in the currency's minor unit
   so totals stay exact), currency (MAD, USD, EUR), billing cycle (monthly,
@@ -265,6 +265,74 @@ invoice is laid out in a single pass (a test asserts a generous time budget on t
 layout step). The picker, the layout engine and the PDF wrapper are all lazily loaded,
 so nothing in this feature sits in the startup bundle.
 
+## Notebook and calendar (offline, 2.1.0)
+
+Two screens that keep the small things next to the invoices, in the same encrypted
+vault: **Notebook** for ideas, notes and tasks, **Calendar** for everything that has
+a date. Offline by construction — no INTERNET permission, no new permission, the
+shipped CSP unchanged — and the notes live in a tenth store inside the same database
+and the same import transaction.
+
+- **Data**: `Note { title?, body, tags[], color?, pinned, archived, type, done,
+  date?, time?, remindMinutesBefore?, linkedCustomerId?, linkedInvoiceId?,
+  linkedProjectId?, createdAt, updatedAt }`. Plain text only: the editor never
+  renders HTML, and every value is escaped where it is shown. Caps: 120 characters
+  of title, 2 000 of body, 10 tags of 24 characters. The palette is a fixed list of
+  ten AA-checked colours; an unknown colour falls back to none. A link is a soft
+  reference — if the customer, invoice or project is deleted, the note keeps its day
+  and simply shows without the target.
+- **Two-tap capture**: a floating **+** and the **Quick idea** shortcut on the
+  Dashboard save the body first, with the title optional; the full editor (type,
+  colour, tags, date, time, reminder, links, pin, archive) is one more tap. An idea
+  becomes a task with *Convert idea to task*, and a task is completed with *Mark
+  done*.
+- **Never lose text**: typing is saved on a 400 ms debounce *and* flushed when the
+  app is hidden or closed. The draft is sealed with the vault key and kept in
+  Preferences, so what is on disk is ciphertext; a draft written before an app reset
+  cannot be read afterwards. A draft that is damaged or older than 30 days is
+  dropped quietly.
+- **List and search**: search over title, body and tags (accent-, case- and
+  Arabic-alef insensitive, the same normalisation the FAQ search uses), filters for
+  type, tag, dated/undated, open/done and archived, sorting by last change, date or
+  creation, pinned entries first and undated entries last. Delete asks first;
+  archiving is the gentle option, and the archive has its own view.
+- **Calendar**: a month grid plus the agenda of the selected day. Week starts on
+  **Monday** by default, switchable to Saturday or Sunday in Settings (the existing
+  date preference). Each day shows dots with a count *and* an accessible sentence
+  ("3 items"/"No items"); every row carries its own icon **and** a written label, so
+  the kind is never carried by colour alone. Tapping a row opens the note, invoice,
+  estimate or subscription it belongs to; tapping an empty day offers "Add note on
+  this date". Type filters can be switched off one by one.
+- **What the calendar shows**: notes and tasks with a date; invoices that are not
+  paid yet (marked overdue once the due date is behind us); subscriptions that are
+  neither cancelled nor past, on their next renewal or end date; and pending
+  estimates on their expiry date. Paid invoices, cancelled subscriptions and closed
+  estimates are simply absent. Dates are **local calendar dates** computed on the
+  existing date helpers, so a time-zone change or a daylight-saving day never moves
+  an item, and only the visible month (plus the grid's padding days) is computed, so
+  a notebook with thousands of entries stays responsive. Arabic mirrors the grid
+  through the shared RTL rules, arrows included.
+- **Reminders**: a note with a date can carry a reminder (at the time, 15 minutes,
+  1 hour or 1 day before). A date-only note reminds at **09:00** local. Reminders
+  reuse `@capacitor/local-notifications`, are **inexact** (no exact-alarm
+  permission) and are rebuilt on launch, after any add/edit/delete/archive/done and
+  after a restore; deleting, archiving or completing a note cancels its
+  notification. The pending set is shared with the subscriptions and capped at the
+  soonest **60**, topped up on each launch. Notification text never contains a note:
+  with "Hide service names in notifications" on (the default) it is a generic line,
+  and even with it off only the title is used, cut to 60 characters. A refused
+  notification permission leaves the in-app banner in charge.
+- **Dashboard**: a **Today and next 7 days** card lists dated items from every
+  source with the same aggregation the calendar uses, so the two can never disagree.
+- **Backups**: notebook entries are encrypted like every other record and travel in
+  the encrypted `.fatorati` backup (**3.2.0**). They are never part of the CSV, PDF
+  or Excel exports. Import validation rejects a bad note (type, flags, title, tag
+  count/length, date, time, reminder, link caps, body length) before anything is
+  written, and a file with more records than the cap is refused; `resetApp` and the
+  lock clear notes like everything else.
+- **Not in this version**: no rich text, no attachments or images in notes, no
+  recurring notes, and notes are deliberately absent from the unencrypted exports.
+
 ## Dates and appearance
 
 Settings includes DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD or automatic dates; 12h/24h time; searchable Intl time zones (phone zone by default); first day of week; optional Hijri display for Arabic. Record timestamps stay UTC milliseconds internally; the backup serializer emits ISO UTC timestamps and the loader restores milliseconds. Date-only fields remain ISO calendar dates, avoiding timezone shifts.
@@ -284,11 +352,11 @@ Light/dark/system mode, ten accent presets/custom color, and comfortable/compact
 
 Android's file picker can put the app in the background. A selected File handle is retained by a DOM listener outside the unmounted data UI, **not decrypted while locked**. Unlock, then return to Settings if prompted to finish the import. Onboarding logo selection uses the same lifecycle-safe handoff. If Android kills the process, choose the file again.
 
-Backup **3.1.0** contains the nine stores (subscriptions included, plus the template snapshot and the optional logo/stamp of the business record), all display/security policy preferences, document currency/language/rates/times/color settings, the default template and a non-secret biometric-enabled flag. No PIN verifier, encryption key or biometric credential is exported. The destination keeps its local PIN; biometric credentials cannot transfer and must be enrolled locally. Replace restores display preferences; Merge uses their `updatedAt`. Imported preferences are committed with records and safely applied from a pending marker after unlock.
+Backup **3.2.0** contains the ten stores (subscriptions and notebook entries included, plus the template snapshot and the optional logo/stamp of the business record), all display/security policy preferences, document currency/language/rates/times/color settings, the default template and a non-secret biometric-enabled flag. No PIN verifier, encryption key or biometric credential is exported. The destination keeps its local PIN; biometric credentials cannot transfer and must be enrolled locally. Replace restores display preferences; Merge uses their `updatedAt`. Imported preferences are committed with records and safely applied from a pending marker after unlock.
 
-Version **1.0.0**, **2.0.0** and **3.0.0** JSON and encrypted backups remain importable; a file written before templates existed upgrades every document to the legacy snapshot, which renders exactly like the pre-template PDF. Migration fills currency/language/time/preferences defaults, preserves IDs/timestamps and quantizes financial amounts. Existing display invoice numbers are not unique identity keys, so records from different phones with the same number can coexist. The UI remains single-business, not a multi-company account manager.
+Version **1.0.0**, **2.0.0**, **3.0.0** and **3.1.0** JSON and encrypted backups remain importable; a file written before the notebook existed simply gets an empty notes list, everything else untouched. A file written before templates existed upgrades every document to the legacy snapshot, which renders exactly like the pre-template PDF. Migration fills currency/language/time/preferences defaults, preserves IDs/timestamps and quantizes financial amounts. Existing display invoice numbers are not unique identity keys, so records from different phones with the same number can coexist. The UI remains single-business, not a multi-company account manager.
 
-An import uses one transaction spanning **all nine stores plus metadata**, stronger than separate per-store transactions. Encryption is prepared before opening that transaction to avoid IndexedDB auto-close during crypto awaits. A failure leaves the whole import unchanged.
+An import uses one transaction spanning **all ten stores plus metadata**, stronger than separate per-store transactions. Encryption is prepared before opening that transaction to avoid IndexedDB auto-close during crypto awaits. A failure leaves the whole import unchanged.
 
 The last-backup Preferences date records successful share handoff, not proof of delivery. Failed/canceled shares reported by Capacitor do not reset it; CSV/PDF/imports do not either. The dashboard reminds after seven days or when no backup has been recorded. Native exports use unique Cache folders and FileProvider; only non-native test/browser execution uses `<a download>`.
 
@@ -509,6 +577,14 @@ compileSdk 36 upgrade, meaning the app compiles and links against the platform.
 
 ### Still requires physical Android/emulator verification
 
-Native biometric hardware/enrollment/cancellation and its Activity lifecycle, actual Android background/process-death locking, share-sheet delivery to real apps, first-paint/native splash/status-bar behavior, screenshot/recents protection, and signed release builds have **not** been verified on a device. For the subscriptions tracker specifically, the following need a real device: the `POST_NOTIFICATIONS` prompt and its denied path, whether a scheduled reminder actually appears (including after battery optimization and a force-stop), the notification tap/foreground behaviour, and the Android share sheet for the `.xlsx` and `.pdf` exports. Browser tests and native-bridge mocks do not establish these. Before distributing: run the build on a Java 21/SDK machine, test all five languages on real screens, background every form/picker/prompt, and transfer a backup between two Android phones. Confirm blocked screenshots, biometric fallback to the PIN, and the PIN/lockout/restore recovery paths.
+Native biometric hardware/enrollment/cancellation and its Activity lifecycle, actual Android background/process-death locking, share-sheet delivery to real apps, first-paint/native splash/status-bar behavior, screenshot/recents protection, and signed release builds have **not** been verified on a device. For the subscriptions tracker and the notebook specifically, the following need a real
+device: the `POST_NOTIFICATIONS` prompt and its denied path, whether a scheduled
+reminder actually appears (including after battery optimization and a force-stop) and
+**at the right local time** for both a timed note and a date-only note (09:00), the
+notification tap/foreground behaviour, the Android share sheet for the `.xlsx` and
+`.pdf` exports, the on-screen keyboard while writing a long note (the editor is a
+full-screen overlay: the keyboard must not cover the buttons or the counter, and
+scrolling must keep the caret visible), and the month grid in Arabic RTL on a real
+screen (cell order, mirrored arrows, day labels). Browser tests and native-bridge mocks do not establish these. Before distributing: run the build on a Java 21/SDK machine, test all five languages on real screens, background every form/picker/prompt, and transfer a backup between two Android phones. Confirm blocked screenshots, biometric fallback to the PIN, and the PIN/lockout/restore recovery paths.
 
 The source ZIP excludes `.git`, `node_modules`, `dist`, generated Capacitor assets/Cordova scaffolding, local SDK configuration, signing secrets, test artifacts, caches and build outputs. It includes native launcher/splash resources, Android source, Gradle wrapper, lockfile, translations and tests. Build and sync regenerate excluded assets.

@@ -1,3 +1,69 @@
+# Unreleased — notebook and calendar (2026-09-30)
+
+Ideas, notes, tasks and a month calendar in the same encrypted vault. Offline only:
+no INTERNET permission, no new permission (the notification permission was already
+used by subscriptions), CSP unchanged. Still version 2.1.0; the backup format moves
+to **3.2.0**.
+
+- **Encrypted notes store (tenth store)**: `Note { title?, body, tags[], color?,
+  pinned, archived, type, done, date?, time?, remindMinutesBefore?,
+  linkedCustomerId?, linkedInvoiceId?, linkedProjectId?, createdAt, updatedAt }`,
+  plain text only, in the same IndexedDB database and the same import transaction.
+  Caps: title 120, body 2 000, 10 tags of 24 characters, ten AA-checked palette
+  colours (unknown colour → none). Links are soft: a deleted customer, invoice or
+  project leaves the note intact and simply shows it without a target.
+- **`src/lib/notes.ts`**: validation (`validateNote` returns an i18n key), clamping
+  (`normalizeNote`), tag normalisation, search over title/body/tags with the FAQ's
+  accent-, case- and Arabic-alef-insensitive normalisation (now shared through
+  `src/lib/text-search.ts`), filters (type, tag, dated, open/done, archived), three
+  sorts with pinned first and undated last, and the reminder moment
+  (`noteReminderAt`: a time, or 09:00 for a date-only note, minus the chosen offset).
+- **`src/lib/notes-draft.ts`**: the editor's autosave. Typing is sealed with the
+  vault key into Preferences on a 400 ms debounce and flushed when the app is hidden;
+  a damaged, stale (> 30 days) or unreadable draft (written before a reset) is dropped
+  quietly, and an unfinished draft is offered again instead of being overwritten.
+- **`src/lib/calendar.ts`**: pure date logic — `monthGrid`/`gridRange` (weeks start on
+  the Settings day, Monday by default), `weekdayLabels`, `collectCalendarItems`
+  (dated notes and tasks, unpaid invoices marked overdue, subscriptions that are
+  neither cancelled nor past on their renewal/end date, pending estimates on their
+  expiry date), range/item grouping, `daySummary` for the accessible "3 items", and
+  `upcomingItems` for the dashboard card. Local calendar dates only, so DST and time
+  zones never move an item, and only the visible month is computed.
+- **Notebook screen**: two-tap quick capture (plus a Dashboard shortcut and a floating
+  action button), full editor with type, colour, tags, date, time, reminder, links,
+  pin and archive, "Convert idea to task" and "Mark done", delete behind a
+  confirmation, archive as the gentle option, empty state that explains the feature,
+  search/filter/sort bar and a translated counter.
+- **Calendar screen**: month grid (dots **and** counts, every cell labelled for screen
+  readers) beside the agenda of the selected day, per-type filter switches, "Add note
+  on this date", rows that open the record they belong to, and RTL mirroring for
+  Arabic. Shared presentational components (`MonthGrid`, `EventRow`, `NoteList`) keep
+  the calendar, the agenda and the dashboard card identical.
+- **Reminders**: inexact `@capacitor/local-notifications` only (no exact-alarm
+  permission), built from notes **and** subscriptions in one plan, sorted by time and
+  capped at the soonest **60**; rebuilt on launch, after every add/edit/delete/
+  archive/done and after a restore; a deleted, archived or completed note cancels its
+  notification. Permission is requested when the user chooses a reminder, never at
+  start; a refusal falls back to the existing in-app banner. Notification text never
+  contains note text: generic by default, and even with hiding off only the title.
+- **Backup 3.2.0**: `notes` is validated field by field before any write (type, flags,
+  title, tag count/length, date, time, reminder choice, link caps, body length), and a
+  file over the per-store record cap is refused. Version 1.0.0–3.1.0 files still
+  import: the 3.1.0 → 3.2.0 migration adds an empty notes list and changes nothing
+  else. Notes travel in the encrypted `.fatorati` backup only — never in the CSV, PDF
+  or Excel exports — and `resetApp`/lock clear them like every other record.
+- **Tests** (59 new, 207 total): note model/caps/palette contrast, filters, search
+  (accents and Arabic variants) and sorting; backup migration from 3.1.0, thirteen
+  rejected import shapes and the record cap, encryption of stored notes, reset and
+  lock; draft round-trip, staleness, wrong-key, damage, debounce and failure paths;
+  calendar grid (month lengths, leap years, the three week starts, month ends, DST
+  days, boundary items), aggregation (paid invoices excluded, deleted link targets,
+  overdue markers, upcoming window) and month navigation; note reminders with the
+  mocked plugin (scheduled, capped, cancelled, rescheduled after a restore,
+  hidden-text mode, denied permission, plugin failure); the screens rendered in all
+  five languages with Arabic RTL, escaped note text, a labelled grid, 48 px targets
+  and the closed palette.
+
 # Unreleased — document templates for invoices and estimates (2026-09-30)
 
 Layouts and topic presets for invoices and estimates, chosen per document and

@@ -21,8 +21,8 @@ la couche web.
 ## Ce qui est stocké, et où
 
 Tout ce que vous saisissez (informations de l'entreprise, clients, projets,
-factures, devis, dépenses, produits, abonnements, réglages) est stocké
-**uniquement sur votre appareil**, dans l'espace privé de l'application
+factures, devis, dépenses, produits, abonnements, idées, notes, tâches, réglages) est
+stocké **uniquement sur votre appareil**, dans l'espace privé de l'application
 (IndexedDB), chiffré en AES-256-GCM. La clé de chiffrement est dérivée du code PIN
 à 6 chiffres que vous créez, via PBKDF2-SHA256 (600 000 itérations, sel aléatoire).
 Le PIN n'est jamais conservé comme clé ni comme mot de passe : seul un vérificateur
@@ -97,6 +97,19 @@ Drive par le système.
 - **Effacer les fichiers temporaires** (Réglages → Sécurité) supprime les fichiers
   d'export du cache. L'application les efface aussi automatiquement au démarrage
   et après chaque déverrouillage.
+
+## Rappels du carnet et du calendrier
+
+Les notes, les tâches et le calendrier vivent dans le même coffre chiffré que le
+reste des enregistrements, et ne voyagent que dans la sauvegarde chiffrée
+`.fatorati`. Un rappel est une notification Android locale : il ne quitte jamais
+l'appareil. Par défaut son texte est générique (« Note reminder »), donc aucun
+contenu de note n'apparaît sur l'écran de verrouillage ni dans le volet de
+notifications ; l'application laisse aussi « Masquer les noms de services dans les
+notifications » activé. Les notifications sont approximatives, l'application ne
+demande jamais la permission d'alarme exacte, et refuser la permission de
+notification signifie seulement que les rappels restent silencieux et que
+l'application affiche une bannière interne.
 
 ## Permissions
 

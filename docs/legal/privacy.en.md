@@ -18,8 +18,8 @@ for fonts, not for crash reports. The Content-Security-Policy it ships is
 ## What is stored, and where
 
 Everything you enter (business details, customers, projects, invoices, estimates,
-expenses, products, subscriptions, settings) is stored **only on your device**,
-inside the app's private storage (IndexedDB), encrypted with AES-256-GCM. The
+expenses, products, subscriptions, ideas, notes, tasks, settings) is stored **only on
+your device**, inside the app's private storage (IndexedDB), encrypted with AES-256-GCM. The
 encryption key is derived from the 6-digit PIN you create, using PBKDF2-SHA256
 (600 000 iterations, random salt). The PIN itself is never stored as a key or a
 password: only a verifier is kept, so a forgotten PIN cannot be recovered.
@@ -84,6 +84,17 @@ not copied into Google Drive by the system.
 - **Clear temporary files** (Settings → Security) removes staged export files
   from the app cache. The app also clears them automatically when it starts and
   after each unlock.
+
+## Notebook and calendar reminders
+
+Notes, tasks and the calendar live in the same encrypted vault as every other
+record, and they are included in the encrypted `.fatorati` backup only. A reminder
+is a local Android notification: it never leaves the device. By default its text is
+generic ("Note reminder"), so no note content appears on the lock screen or in the
+notification shade; the app also keeps "Hide service names in notifications" on.
+Notifications are inexact, the app never asks for the exact-alarm permission, and
+refusing the notification permission only means reminders stay silent and the app
+shows an in-app banner.
 
 ## Permissions
 

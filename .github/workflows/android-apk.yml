@@ -127,6 +127,9 @@ jobs:
             | sed 's/.*android:name="\([^"]*\)".*/\1/' | sort -u)
           echo "permissions in the merged release manifest:"
           printf '%s\n' "$perms" | sed 's/^/  /'
+          # Also as a notice, so the exact set is visible in the run's annotations
+          # without downloading the bundle.
+          printf '::notice::merged release manifest permissions: %s\n' "$(printf '%s' "$perms" | tr '\n' ' ')"
 
           # One permission per line, so the match below is an exact string compare.
           allow="

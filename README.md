@@ -1,6 +1,6 @@
 # Fatorati 2 — Android offline
 
-Capacitor 8, React 19, Vite 8, pnpm. App ID: `com.fatorati.app`. Version 2.1.0. No accounts, analytics, remote translation, cloud SDKs, rate services, PWA, service workers, or runtime network features. The Android app does **not declare INTERNET**. Android automatic backups and device extraction are excluded. Sharing is an explicit handoff to an app the user chooses; the receiving app can use its own connection.
+Capacitor 8, React 19, Vite 8, pnpm. App ID: `com.fatorati.app`. Version 2.2.0. No accounts, analytics, remote translation, cloud SDKs, rate services, PWA, service workers, or runtime network features. The Android app does **not declare INTERNET**. Android automatic backups and device extraction are excluded. Sharing is an explicit handoff to an app the user chooses; the receiving app can use its own connection.
 
 **Your data lives only on this phone. Uninstalling the app deletes it. Export a backup regularly.**
 
@@ -70,17 +70,32 @@ network, no INTERNET permission and no relaxation of the shipped
   `taxAssistantSeen` live in the encrypted settings store (with the rest of the
   vault), so they are encrypted at rest and travel with an encrypted backup.
   Regions from other apps or older backups are ignored rather than trusted.
-- **Morocco**: TVA 20% standard and 10% reduced, 0%/exempt for exports and exempt
-  items, the 7% and 14% rates removed on 1 January 2026 (valid only for invoices
-  dated before that), the Art. 145 CGI content checklist (IF, TP, RC, 15-digit
-  ICE, sequential gap-free numbering, per-rate TVA amounts, payment method), the
-  auto-entrepreneur case (no TVA under 500,000 DH with the "TVA non applicable"
-  mention plus ICE, IF, TP and CNIE), the e-invoicing principle in Art. 145-IX
+- **Morocco**: TVA 20% standard and 10% reduced (10% only for the operations the
+  CGI lists; exemptions and out-of-scope situations are legal statuses, not a 0%
+  rate choice; exports exempt with the right to deduct, Art. 92), the 7% and 14%
+  rates removed on 1 January 2026 with the applicable rate following the date of
+  the operation, the Art. 145 CGI content checklist (IF, TP, RC, 15-digit ICE,
+  sequential gap-free numbering, per-rate TVA amounts, payment method), the
+  auto-entrepreneur case (outside the scope of TVA, two ceilings — 200,000 DH
+  services / 500,000 DH commerce-industry-artisanat, 1%/0.5% flat tax, the
+  80,000 DH single-client 30% withholding at source in force since the 2023
+  finance law, the "TVA non applicable" mention plus ICE, IF and CNIE), Law
+  69-21 payment deadlines (B2B, 60 days default, 120 by contract, up to 180 by
+  sector derogation, Treasury fine on the BAM policy rate, 2M DH scope), record
+  keeping (10 years, lost documents reported within 15/30 days — Art. 211 CGI),
+  the e-invoicing principle in Art. 145-IX (announced rollout, decree
+  unpublished at review, no date stated, offline-PDF limitation spelled out)
   and the deduction risk of a missing or wrong ICE or IF.
 - **United States**: no federal sales tax, state rates plus local city/county
-  rates that vary by address, nexus and economic-nexus thresholds, exemption and
-  resale certificates, invoice content, the difference between sales tax and
-  income tax (1099-NEC/W-9), and 3–7 year record keeping.
+  rates, sourcing that depends on the state and transaction (destination,
+  origin or mixed — no universal ship-to rule), nexus and economic-nexus
+  thresholds that vary per state, exemption and resale certificates, invoice
+  content, the difference between sales tax and income tax (1099-NEC at 2,000
+  USD for payments after 31 Dec 2025 with other 1099 categories keeping their
+  own thresholds, 1099-K at 20,000 USD/200 transactions federally with possible
+  reporting below it, W-9 collection, thresholds decide reporting not
+  taxability), and record keeping that is state-specific (commonly 3–5 years)
+  plus distinct federal periods.
 - **Honest about what is unknown**: the e-invoicing timeline and thresholds are
   not stated as fact ("Check the DGI website for the current status"), and every
   region carries a visible **Last reviewed: 2026-09-30** date plus a

@@ -50,9 +50,10 @@ export const TAX_GUIDE: Record<TaxRegion, TaxGuide> = {
         id: 'rates',
         title: 'Value added tax (TVA)',
         bullets: [
-          'Standard rate 20%; reduced rate 10%.',
-          'Exports and exempt items: 0% or exempt, with the legal mention on the invoice.',
-          'The 7% and 14% rates were removed on 1 January 2026 and are valid only for invoices dated before that date.',
+          'Standard rate 20%; reduced rate 10% only for the operations the CGI lists - the rate follows the nature of the operation, it is never a free choice.',
+          'An exemption or an out-of-scope status is a legal situation, not a 0% rate you pick: enter 0% here and state the legal reason on the invoice.',
+          'Exports are exempt with the right to deduct (Art. 92 CGI): no TVA on the invoice, with the exemption mention.',
+          'The 7% and 14% rates were removed on 1 January 2026; the applicable rate follows the date the operation is carried out.',
           'Some sectors keep special rates or exemptions: check the CGI.',
         ],
       },
@@ -72,9 +73,31 @@ export const TAX_GUIDE: Record<TaxRegion, TaxGuide> = {
         id: 'auto-entrepreneur',
         title: 'Auto-entrepreneur',
         bullets: [
-          'An auto-entrepreneur invoices without TVA while annual turnover stays under 500,000 DH.',
-          'Write the mention "TVA non applicable" on the invoice.',
-          'Show ICE, IF, TP and the CNIE number.',
+          'An auto-entrepreneur invoices without TVA. Two annual ceilings apply to the amounts collected: 200,000 DH for services, 500,000 DH for commercial, industrial and artisanal activity.',
+          'Flat income tax on turnover: 1% for services, 0.5% for commercial, industrial and artisanal activity.',
+          'For services, the part of the yearly turnover collected from one same professional client above 80,000 DH suffers a 30% withholding at source, applied by that client on the excess (in force since the 2023 finance law, Art. 73 CGI). It is a withholding rule, not a cap on what you may invoice.',
+          'An auto-entrepreneur is outside the scope of TVA: write the mention "TVA non applicable" (with the status) on the invoice rather than a 0% tax line.',
+          'Show ICE, IF and the CNIE number; ask your accountant which other identifiers your situation requires.',
+        ],
+      },
+      {
+        id: 'payment-deadlines',
+        title: 'Payment deadlines (Law 69-21)',
+        bullets: [
+          'Between businesses: 60 days from the invoice date by default, up to 120 days when the contract agrees on it, and up to 180 days in sectors with a regulated derogation. Sales to consumers are outside this law.',
+          'Without an invoice, or with a late one, the period runs from the end of the month of the delivery or of the service - so issue invoices promptly.',
+          'Paying late carries a fine payable to the Treasury, based on the Bank Al-Maghrib policy rate and growing with every month of delay; businesses in scope also file periodic declarations.',
+          'These duties apply to businesses above 2 million DH of annual turnover, so many small sellers are outside them - but their clients may not be.',
+        ],
+      },
+      {
+        id: 'records',
+        title: 'Record keeping',
+        bullets: [
+          'Keep invoices, supporting documents and books for 10 years.',
+          'A lost document must be reported to the tax inspector by registered letter within 15 days (30 days in case of force majeure).',
+          'Not keeping the records is fined.',
+          'Fatorati has no PIN recovery - keep your backups: losing the data does not cancel the duty to keep the records.',
         ],
       },
       {
@@ -82,8 +105,9 @@ export const TAX_GUIDE: Record<TaxRegion, TaxGuide> = {
         title: 'E-invoicing',
         bullets: [
           'The principle is in Art. 145-IX of the CGI.',
-          'The start date and the turnover thresholds are not stable across sources and an implementing decree may still be pending, so this app states no date.',
+          'A progressive rollout starting with the largest businesses has been announced, but at the last review the implementing decree was still unpublished: no date, threshold or format binds anyone yet, so this app states no date.',
           'Check the DGI website for the current status.',
+          'If electronic submission or prior validation becomes mandatory for your category, an offline PDF alone may not satisfy it: check the requirement before relying on this app for it.',
           'Fatorati stores invoices as structured data to prepare for it.',
         ],
       },
@@ -107,7 +131,7 @@ export const TAX_GUIDE: Record<TaxRegion, TaxGuide> = {
         bullets: [
           'There is no federal sales tax: each state sets its own rate.',
           'Local city and county rates are added on top, so the total differs from one city to another.',
-          'Enter the combined rate for the buyer\'s ship-to address in the Tax rate field; Fatorati applies it to the invoice subtotal.',
+          'Enter the combined state and local rate that applies to your sale in the Tax rate field; Fatorati applies it to the invoice subtotal but never decides the rate for you.',
           'Use 0% when the sale is not taxable and say why in the notes.',
         ],
       },
@@ -142,22 +166,26 @@ export const TAX_GUIDE: Record<TaxRegion, TaxGuide> = {
         id: 'income',
         title: 'Income tax and contractors',
         bullets: [
-          'Sales tax is separate from income tax: collecting it does not settle what you owe on profit.',
-          'A 1099-NEC may be required for a contractor paid 600 USD or more; ask for a W-9 first.',
+          'Sales tax is separate from income tax: collecting it does not settle what you owe on profit. The Tax rate field is sales tax on the document, never an income-tax or self-employment-tax calculator.',
+          'A 1099-NEC may be required for a contractor paid 2,000 USD or more in a year (payments made after 31 December 2025; the amount is inflation-indexed from 2027). Ask for a W-9 first, whatever the amount.',
+          'Other 1099 categories keep their own thresholds (royalties and payments to attorneys among them): check the current IRS instructions for each form.',
+          'Payment platforms report on Form 1099-K above 20,000 USD and 200 transactions (federal rule); a platform may still send one below that, and some states set lower limits.',
+          'These thresholds decide who files a form, not whether the income is taxable: declare your income either way.',
         ],
       },
       {
         id: 'records',
         title: 'Record keeping',
         bullets: [
-          'Most states require sales, exemption and use-tax records for three to seven years.',
+          'There is no single rule: each state sets its own retention period for sales-tax records, commonly three to five years from the return, and longer or unlimited after fraud or a missing return.',
+          'Federal income-tax records: usually three years, longer in several situations (employment-tax records four). When unsure, keep them.',
         ],
       },
       {
         id: 'tips',
         title: 'Tips',
         bullets: [
-          'The rate follows the buyer\'s ship-to address, not your office address.',
+          'Which address sets the rate depends on the state and the transaction - destination, origin or mixed sourcing rules: check the rules of the state involved.',
           'Rates change: update the default rate in Settings when your main state changes.',
         ],
       },
@@ -181,14 +209,14 @@ export interface TaxFieldHints {
 
 export const TAX_FIELD_HINTS: Record<TaxRegion, TaxFieldHints> = {
   MA: {
-    taxRate: 'Morocco: 20% standard, 10% reduced. Use 0% for exports and exempt items.',
+    taxRate: 'Morocco: 20% standard; 10% only for listed operations. Exempt or out of scope: 0% here plus the legal mention on the invoice.',
     businessTaxNumber: 'ICE is 15 digits. Keep IF, TP and RC ready too: they belong on the invoice.',
     documentNumber: 'Art. 145 CGI: numbering must be sequential and gap-free.',
     customerTax: 'B2B invoices must show the client ICE. Stored values appear on the PDF.',
     customerTaxMissing: 'This client has no ICE stored. Add it in Customers before sending a B2B invoice.',
   },
   US: {
-    taxRate: 'United States: enter the combined state and local rate for the buyer\'s address.',
+    taxRate: 'United States: enter the combined state and local rate for this sale; sourcing rules vary by state.',
     businessTaxNumber: 'Use your EIN or state tax ID; some states require it on the invoice.',
     documentNumber: 'Keep one number series per year and never reuse a number.',
     customerTax: 'Exempt buyers: store their resale or exemption certificate number.',

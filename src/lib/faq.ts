@@ -85,7 +85,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   // Invoices
   { id: 'invoice-number', topic: 'invoices',
     question: 'How is an invoice number built?',
-    answer: 'PREFIX-YEAR-0001. The prefix comes from Settings → Document defaults (INV for invoices, EST for estimates by default), and the four-digit counter continues from the highest number already used in the same year. A number that already exists is skipped.' },
+    answer: 'PREFIX-YEAR-0001. The prefix comes from Settings → Document defaults (INV for invoices, EST for estimates by default), and the four-digit counter continues from the highest number ever used in the same year - it never goes backwards, so a deleted document does not free its number. A number that already exists is skipped.' },
   { id: 'invoice-sequential', topic: 'invoices',
     question: 'Why must invoice numbers stay sequential?',
     answer: 'The bundled tax guide states that Moroccan rules require a sequential, gap-free series (Art. 145 CGI). The app always offers the next number in the series and never reuses one, and it files nothing with any authority.' },
@@ -94,7 +94,7 @@ export const FAQ_ITEMS: FaqItem[] = [
     answer: 'In the invoice list, press Mark as paid, or set the status to paid in the status picker of that row. The paid date is stored and shown under the invoice number.' },
   { id: 'invoice-edit', topic: 'invoices',
     question: 'Can I edit, void or delete an invoice?',
-    answer: 'You can edit a record, or delete it after a confirmation. There is no void status and no credit note: the statuses are draft, sent, paid and overdue. Deleting a number that a customer already received leaves a gap in the series, so check the numbering note in the tax guide first.' },
+    answer: 'You can edit a record; only a draft can be deleted, after a confirmation. Once an invoice is sent, paid or overdue its amounts, customer, dates and number are locked and it stays in the series - correct it with a credit note, which subtracts from the totals in its own period. Credit notes get their own number series (AV by default).' },
   { id: 'invoice-tax', topic: 'invoices',
     question: 'How do I add TVA or sales tax?',
     answer: 'Type the rate in the Tax rate field of the document, or set a default in Settings → Document defaults. The app applies it to the subtotal and prints the rate and the tax amount on the PDF.' },

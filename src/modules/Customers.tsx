@@ -1,17 +1,21 @@
 import { showAlert, askConfirm } from '../lib/dialogs'
-import { errorText } from '../i18n'
-import { number } from '../lib/format'
+import { errorText, usePreferences } from '../i18n'
+import { money, number } from '../lib/format'
 import { t } from '../i18n'
+import { customerOutstanding } from '../lib/status'
+import { todayISO } from '../lib/subscriptions'
 import ExportCsvButton from '../components/ExportCsvButton'
 import { useState } from 'react'
 import { useFatorati } from '../store/useFatorati'
 import type { Customer } from '../store/types'
 import { Plus, Search, Pencil } from 'lucide-react'
 
-const empty = { name: '', email: '', phone: '', address: '', city: '', notes: '', taxNumber: '' }
+const empty = { name: '', email: '', phone: '', address: '', city: '', notes: '', taxNumber: '', kind: 'business' as 'business' | 'individual' }
 
 export default function Customers() {
-  const { customers, addCustomer, updateCustomer, deleteCustomer } = useFatorati()
+  const { customers, invoices, addCustomer, updateCustomer, deleteCustomer } = useFatorati()
+  const prefs = usePreferences()
+  const today = todayISO()
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Customer | null>(null)
   const [search, setSearch] = useState('')
@@ -30,6 +34,7 @@ export default function Customers() {
       name: customer.name, email: customer.email, phone: customer.phone,
       address: customer.address, city: customer.city, notes: customer.notes,
       taxNumber: customer.taxNumber || '',
+      kind: customer.kind || 'business',
     })
     setEditing(customer); setShowForm(true)
   }
@@ -42,6 +47,7 @@ export default function Customers() {
         name: form.name.trim(), email: form.email.trim(), phone: form.phone.trim(),
         address: form.address.trim(), city: form.city.trim(), notes: form.notes.trim(),
         taxNumber: form.taxNumber.trim(),
+        kind: form.kind,
       }
       if (editing) await updateCustomer(editing.id, payload)
       else await addCustomer({ ...payload, balance: 0 })
@@ -93,6 +99,11 @@ export default function Customers() {
               <input aria-label={t('Phone')} type="tel" placeholder={t("Phone")} value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} className={inputClass + ' w-full'} /></label>
             <label className="block"><span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t("City")}</span>
               <input aria-label={t('City')} placeholder={t("City")} value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} className={inputClass + ' w-full'} /></label>
+            <label className="block"><span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t("Customer type")}</span>
+              <select aria-label={t('Customer type')} value={form.kind} onChange={e => setForm({ ...form, kind: e.target.value as 'business' | 'individual' })} className={inputClass + ' w-full'}>
+                <option value="business">{t('Business')}</option>
+                <option value="individual">{t('Individual')}</option>
+              </select></label>
             <label className="block"><span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t("Tax number")}</span>
               <input aria-label={t('Tax number')} placeholder={t("Tax number")} value={form.taxNumber} onChange={e => setForm({ ...form, taxNumber: e.target.value })} className={inputClass + ' w-full'} /></label>
             <label className="block"><span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t("Address")}</span>
@@ -121,6 +132,11 @@ export default function Customers() {
                   <p className="font-medium text-[13px] text-ink">{customer.name}</p>
                   <p className="text-[12px] text-muted mt-0.5 truncate">{[customer.email, customer.phone, customer.city].filter(Boolean).join(' • ')}</p>
                   {customer.taxNumber && <p className="text-[12px] text-muted mt-0.5">{t('Tax number')}: {customer.taxNumber}</p>}
+                  {(() => {
+                    // Computed from effectively sent/overdue invoices - never from a stored balance.
+                    const outstanding = customerOutstanding(invoices, customer.id, prefs.defaultCurrency, today)
+                    return outstanding.length > 0 && <p className="text-[12px] text-warn mt-0.5">{t('Outstanding')}: {outstanding.map(row => money(row.amount, row.currency, false, prefs.language)).join(' • ')}</p>
+                  })()}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <button onClick={() => openEdit(customer)} title={t('Edit')} aria-label={`${t('Edit')} ${customer.name}`} className="p-2 hover:bg-canvas rounded-lg"><Pencil className="w-4 h-4 text-muted" /></button>

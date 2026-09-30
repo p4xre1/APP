@@ -62,9 +62,9 @@ Fatorati est un outil de gestion hors ligne. Il n'est ni affilié, ni certifié,
 ## What's new
 
 ```
-- Abonnements : cycles, renouvellements, totaux par devise, export Excel/PDF, rappels locaux
-- Assistant et guide fiscaux : Maroc et États-Unis (informations générales, pas un conseil fiscal)
-- Carte « À propos » dans les réglages : version, confidentialité, conditions, assistance
-- Meilleur contraste et cibles tactiles plus grandes
-- Message plus clair lorsqu'un export ne peut pas être écrit faute d'espace
+- Paiements partiels sur les factures avec solde restant par document
+- Avoirs pour corriger une facture émise sans la modifier
+- Nouveaux rapports : créances par ancienneté, trésorerie et récapitulatif de taxe (estimation)
+- Dépenses avec taxe, mode de paiement et référence
+- Produits avec prix de revient et alerte de stock bas
 ```

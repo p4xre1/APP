@@ -1,4 +1,5 @@
 import type { FatoratiBackup } from './db'
+import { PRODUCT_TYPES } from './products'
 
 /**
  * 3.1.0 adds the document template snapshot, the item unit/section/discount fields
@@ -8,10 +9,18 @@ import type { FatoratiBackup } from './db'
  * 3.2.0 adds the `notes` store of the notebook. Older files simply have none: the
  * migration writes an empty array and every other record is untouched, so an
  * existing backup still restores exactly the same data.
+ *
+ * 3.3.0 adds `settings.numberFloor` (highest sequence ever used per `PREFIX-YYYY`
+ * number series, so deleted numbers are never reused). Older files get the floor
+ * computed from the document numbers they already contain; nothing else changes.
+ *
+ * Product types (`products.type` plus its optional per-type fields) ride 3.3.0
+ * without a version bump, exactly like costPrice/minStock did: every field is
+ * optional, a missing type means 'physical', and old files import unchanged.
  */
-export const BACKUP_VERSION = '3.2.0'
+export const BACKUP_VERSION = '3.3.0'
 /** Formats this build can still read. Everything older is migrated up on import. */
-export const SUPPORTED_BACKUP_VERSIONS = ['1.0.0', '2.0.0', '3.0.0', '3.1.0', BACKUP_VERSION]
+export const SUPPORTED_BACKUP_VERSIONS = ['1.0.0', '2.0.0', '3.0.0', '3.1.0', '3.2.0', BACKUP_VERSION]
 /** Import limits. They bound work before any decrypt or write happens. */
 export const MAX_BACKUP_BYTES = 25 * 1024 * 1024
 export const MAX_RECORDS_PER_STORE = 20_000
@@ -65,6 +74,8 @@ import type { TaxRegion } from '../store/types'
 export { STORES } from './schema'
 export type { StoreName } from './schema'
 import { defaultPreferences, validPreferences, validCurrency, languages } from './preferences'
+import { floorsFromNumbers } from './fatorati'
+import { clampDueDays } from './status'
 import { roundMoney } from './format'
 import { DEFAULT_TAX_REGION, isTaxRegion } from './taxGuide'
 import { MAX_BACKUP_IMAGE_BYTES, IMAGE_MIME_TYPES } from './images'
@@ -163,6 +174,17 @@ export function validateBackup(value: unknown): asserts value is FatoratiBackup 
           if (record[key] !== undefined && typeof record[key] !== 'boolean') throw invalid()
         }
         if (record.subscriptionWarnDays !== undefined && warnDays(record.subscriptionWarnDays) !== record.subscriptionWarnDays) throw invalid()
+        if (record.defaultDueDays !== undefined && clampDueDays(record.defaultDueDays) !== record.defaultDueDays) throw invalid()
+        if (record.creditNotePrefix !== undefined && !(typeof record.creditNotePrefix === 'string' && /^[A-Z0-9]{1,8}$/.test(record.creditNotePrefix))) throw invalid()
+        if (record.numberFloor !== undefined) {
+          if (!object(record.numberFloor)) throw invalid()
+          const entries = Object.entries(record.numberFloor)
+          if (entries.length > 1000) throw invalid()
+          for (const [series, floor] of entries) {
+            if (!/^[A-Z0-9]{1,8}-\d{4}$/.test(series)) throw invalid()
+            if (!Number.isInteger(floor) || (floor as number) < 1 || (floor as number) > 1_000_000) throw invalid()
+          }
+        }
       }
       if (name === 'subscriptions') {
         if (!isSubscriptionCurrency(record.currency) || !isSubscriptionCycle(record.billingCycle)) throw invalid()
@@ -184,6 +206,7 @@ export function validateBackup(value: unknown): asserts value is FatoratiBackup 
         if (record.exchangeRate !== undefined && (!finite(record.exchangeRate) || record.exchangeRate <= 0 || !validCurrency(record.rateCurrency))) throw invalid()
         if (record.pdfColor !== undefined && typeof record.pdfColor !== 'boolean') throw invalid()
       }
+      if (name === 'customers' && record.kind !== undefined && record.kind !== 'business' && record.kind !== 'individual') throw invalid()
       if (name === 'businesses') {
         for (const key of ['ifNumber', 'tpNumber', 'rcNumber', 'cnieNumber']) {
           if (record[key] !== undefined && (typeof record[key] !== 'string' || record[key].length > 64)) throw invalid()
@@ -195,9 +218,74 @@ export function validateBackup(value: unknown): asserts value is FatoratiBackup 
         if (record.template !== undefined && !isTemplateSnapshot(record.template)) throw invalid()
         if (record.paymentMethod !== undefined && (typeof record.paymentMethod !== 'string' || record.paymentMethod.length > MAX_ITEM_TEXT_LENGTH)) throw invalid()
       }
+      if (name === 'invoices') {
+        // Builder extras: all optional so pre-existing invoices stay valid.
+        for (const key of ['poNumber', 'salesperson']) {
+          if (record[key] !== undefined && (typeof record[key] !== 'string' || (record[key] as string).length > MAX_ITEM_TEXT_LENGTH)) throw invalid()
+        }
+        for (const key of ['shippingAddress', 'privateNotes']) {
+          if (record[key] !== undefined && (typeof record[key] !== 'string' || (record[key] as string).length > MAX_TEXT_LENGTH)) throw invalid()
+        }
+      }
+      if (name === 'invoices' && record.kind !== undefined && record.kind !== 'invoice' && record.kind !== 'credit_note') throw invalid()
+      if (name === 'invoices' && record.payments !== undefined) {
+        if (!Array.isArray(record.payments) || record.payments.length > 200) throw invalid()
+        const paymentIds = new Set<string>()
+        for (const payment of record.payments) {
+          if (!object(payment) || typeof payment.id !== 'string' || !payment.id.trim() || paymentIds.has(payment.id)) throw invalid()
+          paymentIds.add(payment.id)
+          if (!finite(payment.amount) || (payment.amount as number) <= 0) throw invalid()
+          if (!isISODate(payment.date)) throw invalid()
+          for (const key of ['method', 'reference']) {
+            if (payment[key] !== undefined && (typeof payment[key] !== 'string' || (payment[key] as string).length > MAX_ITEM_TEXT_LENGTH)) throw invalid()
+          }
+          if (payment.notes !== undefined && (typeof payment.notes !== 'string' || (payment.notes as string).length > MAX_TEXT_LENGTH)) throw invalid()
+        }
+      }
+      if (name === 'products') {
+        // Optional inventory/measure fields: plain non-negative numbers.
+        for (const key of ['costPrice', 'minStock', 'reorderQty', 'maxStock', 'weight', 'length', 'width', 'height', 'duration']) {
+          if (record[key] !== undefined && (!finite(record[key]) || (record[key] as number) < 0)) throw invalid()
+        }
+        // Product type: optional so pre-type backups stay valid (missing = physical).
+        if (record.type !== undefined && !PRODUCT_TYPES.includes(record.type as never)) throw invalid()
+        if (record.trackInventory !== undefined && typeof record.trackInventory !== 'boolean') throw invalid()
+        for (const key of ['category', 'barcode', 'brand', 'manufacturer', 'model', 'vendor', 'supplierSku', 'location',
+          'weightUnit', 'dimensionUnit', 'billingMethod', 'durationUnit', 'billingFrequency', 'renewal',
+          'fileFormat', 'fileRef', 'version', 'licenseType', 'deliveryMethod']) {
+          if (record[key] !== undefined && (typeof record[key] !== 'string' || (record[key] as string).length > MAX_ITEM_TEXT_LENGTH)) throw invalid()
+        }
+        for (const key of ['fileUrl', 'internalNotes']) {
+          if (record[key] !== undefined && (typeof record[key] !== 'string' || (record[key] as string).length > MAX_TEXT_LENGTH)) throw invalid()
+        }
+        if (record.components !== undefined) {
+          if (!Array.isArray(record.components) || record.components.length > 100) throw invalid()
+          for (const component of record.components) {
+            if (!object(component) || typeof component.name !== 'string' || !component.name.trim()
+              || component.name.length > MAX_ITEM_TEXT_LENGTH
+              || !finite(component.quantity) || (component.quantity as number) <= 0
+              || (component.productId !== undefined && typeof component.productId !== 'string')
+              || (component.note !== undefined && (typeof component.note !== 'string' || (component.note as string).length > MAX_ITEM_TEXT_LENGTH))) throw invalid()
+          }
+        }
+        if (record.attributes !== undefined) {
+          if (!Array.isArray(record.attributes) || record.attributes.length > 40) throw invalid()
+          for (const attribute of record.attributes) {
+            if (!object(attribute) || typeof attribute.name !== 'string' || !attribute.name.trim()
+              || attribute.name.length > MAX_ITEM_TEXT_LENGTH
+              || typeof attribute.value !== 'string' || attribute.value.length > MAX_TEXT_LENGTH) throw invalid()
+          }
+        }
+      }
+      if (name === 'expenses' && record.taxAmount !== undefined) {
+        // Tax contained in the amount: a plain money figure within [0, amount].
+        if (!finite(record.taxAmount) || (record.taxAmount as number) < 0
+          || (record.taxAmount as number) > (record.amount as number)) throw invalid()
+      }
       const optional = name === 'businesses' ? ['city']
-        : name === 'expenses' ? ['receipt']
-        : name === 'invoices' || name === 'estimates' ? ['projectId'] : []
+        : name === 'expenses' ? ['receipt', 'paymentMethod', 'reference']
+        : name === 'estimates' ? ['projectId', 'convertedInvoiceId']
+        : name === 'invoices' ? ['projectId', 'creditsInvoiceId'] : []
       if (optional.some(key => record[key] !== undefined && typeof record[key] !== 'string')) throw invalid()
       if (name === 'invoices' || name === 'estimates') {
         if (!Array.isArray(record.items) || record.items.length > MAX_ITEMS_PER_DOCUMENT) throw invalid()
@@ -207,7 +295,7 @@ export function validateBackup(value: unknown): asserts value is FatoratiBackup 
             || typeof item.description !== 'string'
             || !['quantity', 'unitPrice', 'total'].every(key => finite(item[key]))
             || (item.productId !== undefined && typeof item.productId !== 'string')) throw invalid()
-          for (const key of ['unit', 'section']) {
+          for (const key of ['unit', 'section', 'itemCode']) {
             if (item[key] !== undefined && (typeof item[key] !== 'string' || item[key].length > MAX_ITEM_TEXT_LENGTH)) throw invalid()
           }
           if (item.discount !== undefined && !(finite(item.discount) && item.discount >= 0 && item.discount <= 100)) throw invalid()
@@ -347,6 +435,18 @@ export function migrateBackup(input: unknown): FatoratiBackup {
         if (row.template === undefined) row.template = { ...LEGACY_TEMPLATE, labels: { ...LEGACY_TEMPLATE.labels }, region }
       }
     }
+    // 3.2.0 -> 3.3.0: the number floor of every series is the highest number the
+    // file already uses, so an imported backup continues its sequences and a
+    // number deleted before the export can still never come back.
+    const numbers = (['invoices', 'estimates'] as const)
+      .flatMap(name => (value[name] as unknown as Record<string, unknown>[]).map(row => row.number))
+      .filter((number): number is string => typeof number === 'string')
+    const settings = Array.isArray(value.settings) ? value.settings[0] as Record<string, unknown> | undefined : undefined
+    if (settings && !object(settings.numberFloor)) {
+      const floors = floorsFromNumbers(numbers)
+      if (Object.keys(floors).length) settings.numberFloor = floors
+      else delete settings.numberFloor
+    }
     value.version = BACKUP_VERSION
   }
   validateBackup(value)
@@ -358,6 +458,8 @@ export function normalizeRecord(name: StoreName, source: Record<string,unknown>,
   const row = {...source}, currency = (row.currency as string) || defaultCurrency
   if(!validCurrency(currency)) throw new Error('Invalid currency')
   for(const field of numbers[name]) if(['balance','budget','subtotal','tax','total','amount','unitPrice'].includes(field) && typeof row[field] === 'number') row[field] = roundMoney(row[field],currency)
+  if(name === 'expenses' && typeof row.taxAmount === 'number') row.taxAmount = roundMoney(row.taxAmount, currency)
+  if(name === 'products' && typeof row.costPrice === 'number') row.costPrice = roundMoney(row.costPrice, currency)
   if((name === 'invoices' || name === 'estimates') && row.taxRate !== undefined) {
     const rate = Number(row.taxRate)
     if(!Number.isFinite(rate) || rate < 0 || rate > 1000) throw new Error('Invalid tax rate')
@@ -365,6 +467,9 @@ export function normalizeRecord(name: StoreName, source: Record<string,unknown>,
   }
   if(name==='invoices'||name==='estimates') {
     row.items = (row.items as Record<string,unknown>[]).map(item=>({...item,unitPrice:roundMoney(item.unitPrice as number,currency),total:roundMoney((item.quantity as number)*roundMoney(item.unitPrice as number,currency),currency)}))
+  }
+  if(name==='invoices'&&Array.isArray(row.payments)) {
+    row.payments = (row.payments as Record<string,unknown>[]).map(payment=>({...payment,amount:roundMoney(payment.amount as number,currency)}))
   }
   // A note holds no amount at all, so there is nothing to quantize for it.
   return row

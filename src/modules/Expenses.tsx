@@ -19,6 +19,7 @@ function emptyForm() {
     pdfColor: getPreferences().pdfColor,
     exchangeRate: undefined as number | undefined, rateCurrency: undefined as string | undefined,
     description: '', amount: 0, category: '', vendor: '', date: localInput(),
+    taxAmount: 0, paymentMethod: '', reference: '',
   }
 }
 
@@ -39,6 +40,7 @@ export default function Expenses() {
 
   async function save() {
     if (!form.description.trim() || form.amount <= 0) { await showAlert(t('Enter a description and an amount')); return }
+    if (form.taxAmount < 0 || form.taxAmount > form.amount) { await showAlert(t('The tax amount cannot exceed the expense amount.')); return }
     setBusy(true)
     try {
       const payload = {
@@ -48,6 +50,9 @@ export default function Expenses() {
         description: form.description.trim(), amount: form.amount,
         category: form.category.trim(), vendor: form.vendor.trim(),
         date: form.date.slice(0, 10),
+        taxAmount: form.taxAmount || undefined,
+        paymentMethod: form.paymentMethod.trim() || undefined,
+        reference: form.reference.trim() || undefined,
       }
       if (editing) await updateExpense(editing.id, payload)
       else await addExpense(payload)
@@ -66,6 +71,7 @@ export default function Expenses() {
       pdfColor: expense.pdfColor ?? prefs.pdfColor, exchangeRate: expense.exchangeRate, rateCurrency: expense.rateCurrency,
       description: expense.description, amount: expense.amount, category: expense.category, vendor: expense.vendor,
       date: localInput(expense.occurredAt || expense.createdAt),
+      taxAmount: expense.taxAmount || 0, paymentMethod: expense.paymentMethod || '', reference: expense.reference || '',
     })
     setEditing(expense); setShowForm(true)
   }
@@ -98,6 +104,12 @@ export default function Expenses() {
               <datalist id="expense-categories">{categories.map(category => <option key={category} value={category} />)}</datalist></label>
             <label className="block"><span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t("Vendor")}</span>
               <input aria-label={t('Vendor')} placeholder={t("Vendor")} value={form.vendor} onChange={e => setForm({ ...form, vendor: e.target.value })} className={inputClass} /></label>
+            <label className="block"><span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t('Tax included in the amount')} ({form.currency})</span>
+              <NumberInput aria-label={t('Tax included in the amount')} placeholder="0" value={form.taxAmount} onChange={taxAmount => setForm({ ...form, taxAmount })} className={inputClass} /></label>
+            <label className="block"><span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t('Payment method')}</span>
+              <input aria-label={t('Payment method')} placeholder={t('Optional')} value={form.paymentMethod} onChange={e => setForm({ ...form, paymentMethod: e.target.value })} className={inputClass} /></label>
+            <label className="block"><span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t('Reference')}</span>
+              <input aria-label={t('Reference')} placeholder={t('Optional')} value={form.reference} onChange={e => setForm({ ...form, reference: e.target.value })} className={inputClass} /></label>
             <label className="block md:col-span-2"><span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t('Date and time')}</span>
               <input aria-label={t('Date and time')} type="datetime-local" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} className={inputClass} /></label>
           </div>

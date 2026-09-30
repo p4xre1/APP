@@ -115,6 +115,10 @@ export function LineExtras({ line, columns, groupBy, units, onChange }: {
 
 /** Line of the document form: what the item editor keeps while editing. */
 export interface FormLine {
+  /** Set when the line was filled from a saved product (productToLine). */
+  productId?: string
+  /** Item code (product SKU), printed before the description. */
+  itemCode?: string
   description: string
   quantity: number
   unitPrice: number

@@ -61,9 +61,9 @@ Fatorati is an offline business tool. It is not affiliated with, certified by or
 ## What's new
 
 ```
-- Subscriptions: cycles, renewals, per-currency totals, Excel/PDF export, local reminders
-- Tax assistant and tax guide: Morocco and the United States (general information, not tax advice)
-- About card in Settings: version, privacy policy, terms, support
-- Better contrast and larger touch targets
-- Clearer message when an export cannot be written for lack of storage
+- Partial payments on invoices with a per-document open balance
+- Credit notes to correct issued invoices without altering them
+- New reports: aged receivables, cash flow and a tax summary (estimate)
+- Expenses with tax, payment method and reference
+- Products with cost price and a low-stock alert
 ```

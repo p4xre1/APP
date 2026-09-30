@@ -1,3 +1,163 @@
+# Unreleased — professional invoice builder
+
+The invoice form becomes a full builder while keeping ONE invoice entity,
+ONE totals calculation (documentTotals), ONE payment system, ONE template
+engine/renderer and ONE numbering system.
+
+- Payment-term presets (due on receipt, 7/15/30/45/60 days, custom) that
+  simply set the existing `dueDate`; the Law 69-21 hints and effective
+  status logic are untouched.
+- New optional invoice fields: purchase order #, salesperson (free text),
+  shipping address (with "Same as billing address"), and a private note
+  that is NEVER printed on the document, preview or PDF (test-enforced).
+  Public note and footer note already existed and are reused.
+- Item code on invoice lines, prefilled from the product SKU through the
+  shared productToLine mapping; printed as a prefix of the description so
+  no template column changes.
+- Billing address of the selected customer shown in the form; totals panel
+  now also shows amount paid and balance from the existing payment logic.
+- Live preview of the REAL form state: a transient invoice built exactly
+  like save() feeds the same buildDocumentModel → layoutDocument →
+  paintPage pipeline as the PDF. Side-by-side workspace on wide screens,
+  a preview overlay everywhere; "Save & download PDF" saves through the
+  one store path and exports through the one PDF pipeline; "Clear" resets
+  only the unsaved draft after confirmation.
+- Backup format: all new fields optional and validated, no version bump;
+  pre-builder invoices and old backups import unchanged. 21 new strings in
+  all five languages.
+- Not added (already existed or against the architecture): document-level
+  discount (per-line discounts exist via presets), a shipping charge field
+  (a normal line flows through the same totals), a second tax engine, a
+  second customer/product database, another logo system.
+
+# Unreleased — product types & dynamic product form
+
+One Product entity gains an optional `type` (physical, service, digital,
+recurring service, bundle/package, non-stock, labor/hourly, custom); a
+missing type means physical, so every existing product keeps working and
+no stored value changes. The product form is now progressive: type picker
+with descriptions, basic info, pricing, a type-specific section and a
+collapsed "Advanced options" block. Validation is type-aware (services are
+never blocked by stock fields) and switching type keeps dormant values.
+
+- Product list shows a type chip, category, cost, and "Not tracked" instead
+  of a misleading stock figure for non-inventory types; low-stock warnings
+  only appear on tracked physical products. New type filter plus search by
+  name, SKU, barcode and category.
+- Invoices and estimates can now fill a line from a saved product through
+  one shared mapping (`productToLine`), which sets the stored
+  `InvoiceItem.productId` and copies name, description, unit and price into
+  the existing calculation path. No type ever changes stock: stock remains
+  the manual figure it always was.
+- Bundles reference existing products (name snapshot + quantity + note) with
+  no price rollup or second inventory ledger; digital products store
+  metadata only — the app stays fully offline.
+- Backup format: all new fields are optional and validated; old backups
+  import unchanged (no version bump, same pattern as costPrice/minStock).
+- 102 new strings translated in all five languages; RTL unchanged.
+- Not added (already covered or out of architecture): per-product tax rate/
+  currency/tax category (the engine is one rate per document and one default
+  currency), product CSV (the app has no product CSV), automatic stock
+  deduction (never existed; kept that way), batch/lot tracking.
+
+# Unreleased — legal & tax accuracy audit (2026-09-30)
+
+Content-only verification of every material Moroccan and U.S. legal/tax
+statement against current sources (DGI/CGI texts and reproductions, IRS/OBBBA
+material). No feature, architecture, login, cloud or network change. The
+`TAX_GUIDE_LAST_REVIEWED = 2026-09-30` date was kept only after the check.
+
+- **Corrected (MA):** the 80,000 DH single-client rule is settled law (LF 2023,
+  Art. 73 CGI) — now described as a 30% withholding at source by the client on
+  the excess, for services, instead of "under parliamentary discussion"; the
+  auto-entrepreneur is described as outside the scope of TVA (mention kept);
+  TP dropped from the auto-entrepreneur identifier bullet (open question in
+  REVIEW-NEEDED.md); Law 69-21 bullets now carry the B2B scope, the 180-day
+  sector derogation, the month-end start when the invoice is late and the
+  BAM-policy-rate-based fine; the 10% TVA rate is stated as applying only to
+  listed operations and exemption as a legal status, not a 0% choice; exports
+  called out as exempt with the right to deduct (Art. 92); e-invoicing keeps
+  stating no date (decree unpublished at review) and now warns that an offline
+  PDF alone may not satisfy an electronic submission duty. Due-date hints say
+  "between businesses" and mention sector derogations.
+- **Corrected (US):** no universal ship-to sourcing claim — sourcing depends on
+  the state (destination/origin/mixed); record keeping split into
+  state-specific sales-tax periods (commonly 3–5 years, longer after fraud or
+  no return) and distinct federal periods; 1099-K noted as reportable below
+  the federal 20,000/200 line and by lower state limits; other 1099 categories
+  keep their own thresholds; the Tax rate field explicitly not an income-tax
+  calculator.
+- **Verified unchanged:** TVA 20/10 with 7%/14% removed 1 Jan 2026; AE
+  ceilings 500k/200k and 0.5%/1% on collected turnover; Art. 145 invoice
+  checklist; Art. 211 record keeping (10 years, 15/30-day loss report);
+  1099-NEC 2,000 USD after 31 Dec 2025; "TVA non applicable" mention.
+- Tests extended in place (285 before, 285 after, all green); dictionaries
+  stay at parity in all five languages; REVIEW-NEEDED.md documents what
+  official sources could not settle.
+
+# 2.2.0 — accounting depth (2026-09-30)
+
+Payments, credit notes and real reports on top of the 2.1.0 invoicing core.
+Offline only: no new permission, CSP unchanged, backup format **stays 3.3.0**
+(every new field is optional, so older files import unchanged and no migration
+was needed). Android versionName 2.2.0 / versionCode 4.
+
+## Tax guide corrections (1.1)
+- 1099-NEC/1099-MISC threshold $2,000 for payments after 2025-12-31 (OBBBA);
+  1099-K back to $20,000/200 transactions. Moroccan auto-entrepreneur dual
+  ceilings 500,000/200,000 DH with the 80,000 DH per-client service rule and
+  Law 69-21 payment deadlines. `TAX_GUIDE_LAST_REVIEWED` kept at 2026-09-30;
+  open questions live in REVIEW-NEEDED.md.
+
+## Invoicing core fixes (1.2–1.8)
+- `effectiveStatus(invoice, today)`: a sent invoice past its due date reads as
+  overdue everywhere (lists, dashboard, reports, calendar) without mutation.
+- Reports rebuilt on one `reportTotals`: revenue = paid excluding tax, tax from
+  paid invoices only, receivables include overdue, expenses per currency, cash
+  profit; Dashboard/Reports read the same function.
+- Gap-free numbering floor per series (`PREFIX-YYYY-`): deleting the highest
+  document can no longer reissue its number; only drafts are deletable.
+- Estimate → invoice conversion carries every field, marks the estimate and
+  can only run once; customers gained business/individual kinds (ICE demanded
+  from businesses only); customer balance is now computed from documents
+  (`customerOutstanding`), never stored; configurable default payment term with
+  an advisory Moroccan 60/120-day hint (advisory only).
+
+## Credit notes and locking (2.1)
+- Issued (non-draft) invoices refuse silent edits of financial fields
+  (`LOCKED_INVOICE_FIELDS` guard in the store). The correction mechanism is a
+  credit note (`kind: 'credit_note'`, its own AV- series, negative sign in
+  every calculation), never mutation of the original.
+
+## Payments (2.2)
+- One canonical model in `src/lib/payments.ts`: `Invoice.payments[]` with
+  amount, date, method, reference, notes. Partial payments are a balance, not
+  a status; full coverage derives `paid`; overpayment is rejected; refunds are
+  credit notes. Receivables everywhere use `invoiceBalance`.
+
+## Reports (2.3–2.5, 2.9–2.11)
+- Aged receivables: not due / 1–30 / 31–60 / 61–90 / 90+ days late, per
+  currency, from the same open balances.
+- Cash flow: money in (payments + settled remainders), money out (expenses +
+  refunded credit notes), net — for this month/quarter/year/all time (plain
+  date ranges).
+- Tax summary (estimate): settled sales excl. tax, tax collected, purchases
+  excl. recorded tax, deductible tax recorded, net position. Cash-basis,
+  labelled an estimate to verify with an accountant; no legal rule applied.
+
+## Expenses and products (2.6, 2.13)
+- Expense: optional `taxAmount` (≤ amount), `paymentMethod`, `reference`;
+  CSV gains the three columns. Product: optional `costPrice` and `minStock`
+  with a low-stock badge; no COGS engine, deliberately.
+
+## Store and legal (3.2, 3.4)
+- Spanish and Portuguese Play listings with the same honest claims, enforced
+  by the listing tests; what's-new refreshed in all five languages.
+- Onboarding states that continuing accepts the terms; the governing-law
+  clause remains an owner/legal decision (REVIEW-NEEDED.md).
+
+Tests: 213 → 285. Typecheck, tests and production build green at every commit.
+
 # Unreleased — notebook and calendar (2026-09-30)
 
 Ideas, notes, tasks and a month calendar in the same encrypted vault. Offline only:

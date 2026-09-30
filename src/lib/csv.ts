@@ -4,6 +4,7 @@ import { sessionGuard } from './vault'
 import { exportBackup } from './db'
 import type { FatoratiBackup } from './db'
 import { shareFile } from './share-file'
+import { paymentsTotal, invoiceBalance } from './payments'
 
 export type CsvStore = 'customers' | 'invoices' | 'expenses'
 
@@ -20,17 +21,20 @@ export function buildCsv(rows: unknown[][]): string {
 export function csvRows(store: CsvStore, backup: FatoratiBackup): unknown[][] {
   const currency = backup.preferences.defaultCurrency
   if (store === 'customers') return [
-    ['ID', 'Name', 'Email', 'Phone', 'Address', 'City', 'Notes', 'Balance', 'Currency', 'Created At', 'Updated At'],
-    ...backup.customers.map(c => [c.id, c.name, c.email, c.phone, c.address, c.city, c.notes, c.balance, currency, new Date(c.createdAt).toISOString(), new Date(c.updatedAt).toISOString()]),
+    // No Balance column: the stored balance was never maintained by anything, so
+    // exporting it would publish a stale figure. What a customer owes is computed
+    // from their open invoices (customerOutstanding) wherever it is displayed.
+    ['ID', 'Name', 'Email', 'Phone', 'Address', 'City', 'Notes', 'Kind', 'Created At', 'Updated At'],
+    ...backup.customers.map(c => [c.id, c.name, c.email, c.phone, c.address, c.city, c.notes, c.kind || 'business', new Date(c.createdAt).toISOString(), new Date(c.updatedAt).toISOString()]),
   ]
   if (store === 'expenses') return [
-    ['ID', 'Description', 'Amount', 'Currency', 'Category', 'Date', 'Date and time', 'Vendor', 'Created At', 'Updated At'],
-    ...backup.expenses.map(e => [e.id, e.description, e.amount, e.currency||currency, e.category, e.date, new Date(e.occurredAt||e.createdAt).toISOString(), e.vendor, new Date(e.createdAt).toISOString(), new Date(e.updatedAt).toISOString()]),
+    ['ID', 'Description', 'Amount', 'Tax Amount', 'Currency', 'Category', 'Date', 'Date and time', 'Vendor', 'Payment Method', 'Reference', 'Created At', 'Updated At'],
+    ...backup.expenses.map(e => [e.id, e.description, e.amount, e.taxAmount ?? 0, e.currency||currency, e.category, e.date, new Date(e.occurredAt||e.createdAt).toISOString(), e.vendor, e.paymentMethod || '', e.reference || '', new Date(e.createdAt).toISOString(), new Date(e.updatedAt).toISOString()]),
   ]
   const names = new Map(backup.customers.map(c => [c.id, c.name]))
   return [
-    ['ID', 'Number', 'Customer ID', 'Customer', 'Project ID', 'Status', 'Date and time', 'Issue Date', 'Due Date', 'Subtotal', 'Tax', 'Total', 'Currency', 'Notes', 'Items (JSON)', 'Created At', 'Updated At'],
-    ...backup.invoices.map(i => [i.id, i.number, i.customerId, names.get(i.customerId) || '', i.projectId, t(i.status,{},i.language), new Date(i.occurredAt||i.createdAt).toISOString(), i.issueDate, i.dueDate, i.subtotal, i.tax, i.total, i.currency||currency, i.notes, JSON.stringify(i.items), new Date(i.createdAt).toISOString(), new Date(i.updatedAt).toISOString()]),
+    ['ID', 'Number', 'Customer ID', 'Customer', 'Project ID', 'Status', 'Date and time', 'Issue Date', 'Due Date', 'Subtotal', 'Tax', 'Total', 'Currency', 'Notes', 'Items (JSON)', 'Kind', 'Credits Invoice ID', 'Amount Paid', 'Balance', 'Created At', 'Updated At'],
+    ...backup.invoices.map(i => [i.id, i.number, i.customerId, names.get(i.customerId) || '', i.projectId, t(i.status,{},i.language), new Date(i.occurredAt||i.createdAt).toISOString(), i.issueDate, i.dueDate, i.subtotal, i.tax, i.total, i.currency||currency, i.notes, JSON.stringify(i.items), i.kind || 'invoice', i.creditsInvoiceId || '', i.status === 'paid' ? i.total : paymentsTotal(i, currency), invoiceBalance(i, currency), new Date(i.createdAt).toISOString(), new Date(i.updatedAt).toISOString()]),
   ]
 }
 

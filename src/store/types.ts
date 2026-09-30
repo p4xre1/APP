@@ -122,6 +122,12 @@ export interface Business {
 }
 
 export interface Customer {
+  /**
+   * 'business' prints and requires the Client ICE on Moroccan documents;
+   * 'individual' has no ICE, so no row and no warning. Records saved before
+   * this field existed have no value and are treated as 'business'.
+   */
+  kind?: 'business' | 'individual'
   taxNumber?: string
   id: string
   name: string
@@ -146,9 +152,24 @@ export interface Project {
   updatedAt: number
 }
 
+/** One payment recorded against an invoice. Positive amount, invoice currency. */
+export interface InvoicePayment {
+  id: string
+  amount: number
+  /** Local calendar date, YYYY-MM-DD - same convention as issue and due dates. */
+  date: string
+  /** Free wording, like Invoice.paymentMethod. */
+  method?: string
+  /** Cheque number, transfer id … */
+  reference?: string
+  notes?: string
+}
+
 export interface InvoiceItem {
   id: string
   productId?: string
+  /** Item code shown before the description (usually the product SKU). */
+  itemCode?: string
   description: string
   quantity: number
   unitPrice: number
@@ -162,6 +183,32 @@ export interface InvoiceItem {
 }
 
 export interface Invoice {
+  /**
+   * 'credit_note' marks a correction document that subtracts from every
+   * aggregate (see src/lib/credit-notes.ts). Missing = 'invoice', which is
+   * what every record saved before the field existed means. Amounts are
+   * stored positive on both kinds.
+   */
+  kind?: 'invoice' | 'credit_note'
+  /**
+   * Payments recorded against this invoice (src/lib/payments.ts). Missing =
+   * none recorded; a stored status of 'paid' still means settled. Amounts are
+   * positive, in the invoice currency; a refund is a credit note instead.
+   */
+  payments?: InvoicePayment[]
+  /** For a credit note: id of the invoice it corrects. */
+  creditsInvoiceId?: string
+  /** Customer's purchase-order number, printed in the document meta when set. */
+  poNumber?: string
+  /** Free-text salesperson name, printed in the document meta when set. */
+  salesperson?: string
+  /**
+   * Optional ship-to address (free text, one line per row). Empty = same as
+   * the billing address, which stays the customer's stored address.
+   */
+  shippingAddress?: string
+  /** Internal note. NEVER rendered on the document, the preview or the PDF. */
+  privateNotes?: string
   /** Template snapshot: layout, topic preset, accent, footer note, pinned region. */
   template?: DocumentTemplate
   /** Free wording of how the invoice is paid; printed on the document. */
@@ -191,6 +238,8 @@ export interface Invoice {
 }
 
 export interface Estimate {
+  /** Id of the invoice this estimate was converted into; conversion happens once. */
+  convertedInvoiceId?: string
   /** Template snapshot: layout, topic preset, accent, footer note, pinned region. */
   template?: DocumentTemplate
   /** Free wording of how the estimate is paid; printed on the document. */
@@ -227,7 +276,18 @@ export interface Expense {
   pdfColor?: boolean
   id: string
   description: string
+  /** Recorded amount, tax included when there is one. */
   amount: number
+  /**
+   * Tax (e.g. TVA) contained in `amount`, when the receipt shows one.
+   * Recording it feeds the tax summary as potentially deductible tax; the
+   * app never decides deductibility - that is the accountant's call.
+   */
+  taxAmount?: number
+  /** How it was paid: free wording, like Invoice.paymentMethod. */
+  paymentMethod?: string
+  /** Receipt or transaction reference. */
+  reference?: string
   category: string
   date: string
   vendor: string
@@ -236,14 +296,89 @@ export interface Expense {
   updatedAt: number
 }
 
+/**
+ * What kind of thing the business sells. Missing = 'physical': every product
+ * created before types existed came from a form with stock fields.
+ */
+export type ProductType =
+  | 'physical'
+  | 'service'
+  | 'digital'
+  | 'recurring_service'
+  | 'bundle'
+  | 'non_stock'
+  | 'labor'
+  | 'custom'
+
+/** One line of a bundle: a reference to an existing product plus a quantity. */
+export interface BundleComponent {
+  /** Id of the referenced product; kept even if that product is later deleted. */
+  productId?: string
+  /** Name snapshot so the bundle stays readable if the product is renamed/deleted. */
+  name: string
+  quantity: number
+  note?: string
+}
+
+/** Free-form name/value pair for the custom product type. Display only. */
+export interface ProductAttribute {
+  name: string
+  value: string
+}
+
 export interface Product {
   id: string
   name: string
   description: string
   sku: string
   unitPrice: number
+  /** What one unit costs to buy or make - margin awareness only, no COGS engine. */
+  costPrice?: number
   unit: string
   stock: number
+  /** Warn when `stock` falls to this level or below. */
+  minStock?: number
+  /** Missing = 'physical' (legacy records predate product types). */
+  type?: ProductType
+  category?: string
+  // --- Inventory (physical only; stock stays a manual figure, nothing deducts it) ---
+  /** Missing = true for physical products; other types never track inventory. */
+  trackInventory?: boolean
+  reorderQty?: number
+  maxStock?: number
+  location?: string
+  // --- Identification / supply (advanced) ---
+  barcode?: string
+  brand?: string
+  manufacturer?: string
+  model?: string
+  vendor?: string
+  supplierSku?: string
+  weight?: number
+  weightUnit?: string
+  length?: number
+  width?: number
+  height?: number
+  dimensionUnit?: string
+  // --- Service / labor ---
+  /** Service billing method or labor billing unit ('hourly', 'per_project', 'hour'...). */
+  billingMethod?: string
+  duration?: number
+  durationUnit?: string
+  // --- Recurring service (what the business sells; Fatorati itself has no subscriptions) ---
+  billingFrequency?: string
+  renewal?: string
+  // --- Digital (metadata only: the offline app never stores or fetches the file) ---
+  fileFormat?: string
+  fileRef?: string
+  fileUrl?: string
+  version?: string
+  licenseType?: string
+  deliveryMethod?: string
+  // --- Flexible extras ---
+  internalNotes?: string
+  components?: BundleComponent[]
+  attributes?: ProductAttribute[]
   createdAt: number
   updatedAt: number
 }
@@ -255,6 +390,8 @@ export interface Settings {
   taxRate: number
   invoicePrefix: string
   estimatePrefix: string
+  /** Prefix of the credit-note number series. Missing = 'AV' (French "avoir"). */
+  creditNotePrefix?: string
   theme: 'light' | 'dark' | 'system'
   language: Language
   /** Region used for new documents. Absent on installs created before the tax assistant. */
@@ -277,6 +414,14 @@ export interface Settings {
   templateLayout?: LayoutId
   templatePreset?: PresetId
   templateAccent?: AccentId
+  /**
+   * Highest sequence ever used per number series (`INV-2026` -> 12). The floor
+   * only rises, so a deleted document can never give its number back - the next
+   * number is always above both the stored documents and this floor.
+   */
+  numberFloor?: Record<string, number>
+  /** Days between issue and due date on new invoices (and estimate expiry), 0–365. Missing = 30, the old hardcoded value. */
+  defaultDueDays?: number
   createdAt: number
   updatedAt: number
 }

@@ -37,7 +37,7 @@ export async function buildInvoicePdf(
   const region = settingsRegion(settings)
   const template = documentTemplate(doc.template, region)
   const model = buildDocumentModel({
-    kind: 'expiryDate' in doc ? 'estimate' : 'invoice',
+    kind: 'expiryDate' in doc ? 'estimate' : (doc as Invoice).kind === 'credit_note' ? 'credit_note' : 'invoice',
     document: doc, business, customer, region, currency, language, template,
     appAccent: prefs.pdfColor ? prefs.accent : INK,
   })

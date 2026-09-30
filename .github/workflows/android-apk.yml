@@ -39,8 +39,10 @@ jobs:
           set -euo pipefail
           pnpm cap:sync android
           if ! git diff --quiet -- android; then
-            echo '::error::cap sync changed tracked native files; run "pnpm cap:sync android" and commit the result'
-            git --no-pager diff -- android
+            # Print what drifted (and name it in the annotation) before failing.
+            git --no-pager diff --stat -- android
+            git --no-pager diff -- android | head -200
+            echo "::error::cap sync changed tracked native files: $(git diff --name-only -- android | tr '\n' ' ')"
             exit 1
           fi
 

@@ -1,11 +1,10 @@
 # Privacy Policy — Fatorati (offline)
 
 **Last updated: [LAST UPDATED]** · This policy describes the Android app
-**Fatorati** (`com.fatorati.app`). A copy is published in
-[`docs/legal/privacy.en.md`](docs/legal/privacy.en.md), with translations in
-[`docs/legal/privacy.fr.md`](docs/legal/privacy.fr.md) and
-[`docs/legal/privacy.ar.md`](docs/legal/privacy.ar.md). Host one of them at a
-public URL for the app store listing.
+**Fatorati** (`com.fatorati.app`). This is the English text; it is identical in
+substance to [`privacy.fr.md`](privacy.fr.md) and [`privacy.ar.md`](privacy.ar.md),
+and it mirrors the canonical [`PRIVACY.md`](../../PRIVACY.md) at the repository
+root. Host one of these files at a public URL for the app store listing.
 
 ## Summary
 
@@ -112,13 +111,6 @@ recognition or advertising-ID permission.
 Files are shared through a `FileProvider` restricted to the app's own export
 folder rather than through storage permissions, so no storage access is needed.
 
-To see the list on a real build yourself:
-
-```sh
-"$ANDROID_HOME/build-tools/<version>/aapt2" dump permissions \
-  android/app/build/outputs/apk/release/app-release-unsigned.apk
-```
-
 ## Children
 
 The app is a business tool and is not directed at children. It collects no
@@ -134,9 +126,9 @@ never leaves the device and uninstalling removes it*.
 ## Changes
 
 If this policy ever changes, the new version will be published in this file, in
-`docs/legal/privacy.en.md` and in the app's release notes. Because the app cannot
-fetch anything from the network, a copy of this policy is also shipped with the
-application source.
+`PRIVACY.md` and in the app's release notes. Because the app cannot fetch anything
+from the network, a copy of this policy is also shipped with the application
+source.
 
 ## Contact
 

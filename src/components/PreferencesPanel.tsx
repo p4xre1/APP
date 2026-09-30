@@ -25,12 +25,12 @@ export default function PreferencesPanel(){
     <label className="block"><span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t('Time zone')}</span><select aria-label={t('Time zone')} value={p.timeZone} onChange={e=>void save({timeZone:e.target.value})} className="w-full px-3 py-2 border border-line-strong rounded-lg text-[13.5px] bg-surface text-ink outline-none transition-colors placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-brand/15">{[...new Set([p.timeZone,'UTC',...supportedValues('timeZone')])].filter(zone=>zone===p.timeZone||zone.toLowerCase().includes(zoneSearch.toLowerCase())).map(zone=><option key={zone}>{zone}</option>)}</select></label>
     {select('First day of week','firstDay',[0,1,6])}
     <p className="text-[12px] text-muted">{weekDays().join(' · ')}</p>
-    <label className="flex items-center gap-2 text-[13px] text-ink"><input type="checkbox" checked={p.hijri} onChange={e=>void save({hijri:e.target.checked})}/>{t('Hijri calendar for Arabic')}</label>
+    <label className="flex items-center gap-2 min-h-12 text-[13px] text-ink"><input type="checkbox" checked={p.hijri} onChange={e=>void save({hijri:e.target.checked})}/>{t('Hijri calendar for Arabic')}</label>
     {select('Theme','theme',['light','dark','system'])}
     <label className="block"><span className="block text-[11px] font-semibold text-muted mb-1.5 uppercase tracking-[0.06em]">{t('Accent color')}</span><input type="color" value={p.accent} onChange={e=>void save({accent:e.target.value})} className="block w-16 h-10 border border-line-strong rounded-lg bg-surface text-ink outline-none transition-colors placeholder:text-faint focus:border-brand focus:ring-2 focus:ring-brand/15" /></label>
     <div className="flex flex-wrap gap-2">{accents.map(color=><button key={color} aria-label={`${t('Accent color')} ${color}`} aria-pressed={color===p.accent} onClick={()=>void save({accent:color})} className="w-8 h-8 rounded-lg border border-line-strong transition-all active:scale-[0.98] disabled:opacity-40" style={{backgroundColor:color}} />)}</div>
     {select('Spacing','spacing',['comfortable','compact'])}
-    <label className="flex items-center gap-2 text-[13px] text-ink"><input type="checkbox" checked={p.pdfColor} onChange={e=>void save({pdfColor:e.target.checked})}/>{t('Use color in PDFs')}</label>
+    <label className="flex items-center gap-2 min-h-12 text-[13px] text-ink"><input type="checkbox" checked={p.pdfColor} onChange={e=>void save({pdfColor:e.target.checked})}/>{t('Use color in PDFs')}</label>
     {message&&<p role="alert" className="text-[13px] text-muted">{t(message)}</p>}
     </div>
   </div>

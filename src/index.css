@@ -13,8 +13,10 @@
   --color-surface: #ffffff;
   --color-line: #e5e8ee;
   --color-line-strong: #d3d8e2;
-  --color-muted: #64748b;
-  --color-faint: #94a3b8;
+  /* Text tones: both reach WCAG AA (>= 4.5:1) on surface, canvas and every
+     tinted panel they are used on. tests/contrast.test.ts computes this. */
+  --color-muted: #475569;
+  --color-faint: #5b6b80;
 
   /* Brand */
   --color-brand: #2563eb;
@@ -23,7 +25,7 @@
   --color-brand-700: #1d4ed8;
   --color-navy: #0f172a;
 
-  --color-emerald-brand: #10b981;
+  --color-emerald-brand: #047857; /* white text/icon on it must reach 4.5:1 */
   --color-emerald-50: #e7f9f1;
   --color-emerald-700: #047857;
 
@@ -32,14 +34,14 @@
   --color-sidebar-hover: #1e293b;
   --color-sidebar-active: #2563eb;
   --color-sidebar-ink: #cbd5e1;
-  --color-sidebar-faint: #64748b;
+  --color-sidebar-faint: #94a3b8;
 
   /* Status */
   --color-good: #10b981;
   --color-good-50: #e7f9f1;
-  --color-warn: #d97706;
+  --color-warn: #b45309;
   --color-warn-50: #fdf3e7;
-  --color-serious: #dc2626;
+  --color-serious: #b91c1c;
   --color-serious-50: #fdeaea;
   --color-info-50: #eef3ff;
 
@@ -149,12 +151,37 @@ body {
 }
 
 
+/* Touch targets: Android's 48 dp minimum and WCAG 2.5.8. These rules are
+   intentionally outside @layer so they win over any smaller utility class
+   (h-7, w-8, py-1.5 ...), and they only target real controls - never inline
+   links or body text, so nothing reflows except by growing. */
+button,
+[role='button'],
+select,
+summary,
+input:not([type='checkbox']):not([type='radio']),
+textarea {
+  min-height: 48px;
+}
+button,
+[role='button'],
+select {
+  min-width: 48px;
+}
+/* A checkbox keeps its visual size; the label around it grows to 48 px in the
+   components that own one (see the `min-h-12` on those label rows). */
+input[type='checkbox'],
+input[type='radio'] {
+  min-height: 1.5rem;
+  min-width: 1.5rem;
+}
+
 /* Same application layout in both modes; only semantic colors change. */
 :root { --accent:#2563eb; --accent-ink:#ffffff; --accent-hover-ink:#ffffff; }
 :root[data-theme="dark"] {
   color-scheme:dark;
   --color-ink:#e8edf6; --color-canvas:#0b1220; --color-surface:#111c2e;
-  --color-line:#263449; --color-line-strong:#3b4d66; --color-muted:#a8b6ca; --color-faint:#8a9db7;
+  --color-line:#263449; --color-line-strong:#3b4d66; --color-muted:#a8b6ca; --color-faint:#93a6c0;
   --color-brand-50:#162b4c; --color-brand-100:#1c3964;
   --color-good:#34d399; --color-good-50:#112f29; --color-emerald-50:#112f29; --color-emerald-700:#6ee7b7;
   --color-warn:#fbbf24; --color-warn-50:#32281a;

@@ -29,7 +29,7 @@ export function Btn({
 } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   const styles: Record<string, string> = {
     primary: "bg-brand text-white hover:bg-brand-700 shadow-sm",
-    emerald: "bg-emerald-brand text-white hover:bg-emerald-700 shadow-sm",
+    emerald: "bg-emerald-brand text-white hover:brightness-95 shadow-sm",
     dark: "bg-navy text-white hover:bg-ink shadow-sm",
     ghost: "text-ink hover:bg-ink/[0.05]",
     outline: "border border-line-strong bg-surface text-ink hover:border-muted",

@@ -289,7 +289,7 @@ export default function Subscriptions() {
               </label>
             </div>
             {form.billingCycle !== 'one_time_period' && (
-              <label className="flex items-center gap-2 text-[13px] text-ink">
+              <label className="flex min-h-12 items-center gap-2 text-[13px] text-ink">
                 <input type="checkbox" checked={form.autoRenew} onChange={e => setForm({ ...form, autoRenew: e.target.checked })} />
                 {tr('Renews automatically')}
               </label>

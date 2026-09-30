@@ -50,7 +50,7 @@ export default function SubscriptionRemindersPanel() {
         {config.enabled ? <BellRing className="w-5 h-5" /> : <BellOff className="w-5 h-5" />}{t('Subscription reminders')}</h2>
       <div className="space-y-3.5">
         <p className="text-[12px] text-muted">{t('Reminders are scheduled on this phone only, at 09:00 local time. No exact alarms, no internet.')}</p>
-        <label className="flex items-center gap-2 text-[13px] text-ink">
+        <label className="flex min-h-12 items-center gap-2 text-[13px] text-ink">
           <input type="checkbox" checked={config.enabled} disabled={busy} onChange={e => void toggle(e.target.checked)} />
           {t('Remind me before a renewal')}
         </label>
@@ -60,11 +60,11 @@ export default function SubscriptionRemindersPanel() {
             {Array.from({ length: MAX_WARN_DAYS - MIN_WARN_DAYS + 1 }, (_, index) => MIN_WARN_DAYS + index).map(days => <option key={days} value={days}>{days}</option>)}
           </select>
         </div>
-        <label className="flex items-center gap-2 text-[13px] text-ink">
+        <label className="flex min-h-12 items-center gap-2 text-[13px] text-ink">
           <input type="checkbox" disabled={busy || !config.enabled} checked={config.dayOfReminder} onChange={e => void updateSettings({ subscriptionDayOfReminder: e.target.checked }).catch(error => void showAlert(errorText(error)))} />
           {t('Also remind me on the day')}
         </label>
-        <label className="flex items-center gap-2 text-[13px] text-ink">
+        <label className="flex min-h-12 items-center gap-2 text-[13px] text-ink">
           <input type="checkbox" disabled={busy} checked={config.hideNames} onChange={e => void updateSettings({ subscriptionHideNames: e.target.checked }).catch(error => void showAlert(errorText(error)))} />
           {t('Hide service names in notifications')}
         </label>

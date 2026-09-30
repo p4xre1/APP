@@ -16,7 +16,7 @@ test('all src files, five dictionaries and export text contain zero emoji',()=>{
 })
 test('FatooraLaw 2400f72 light tokens match; dark mode changes colors, not structure',()=>{
   const css=read('src/index.css'),theme=css.slice(css.indexOf('@theme'),css.indexOf('\n:root'))
-  const tokens:Record<string,string>={ink:'#0b1220',canvas:'#f4f6f9',surface:'#ffffff',line:'#e5e8ee','line-strong':'#d3d8e2',muted:'#64748b',faint:'#94a3b8',brand:'#2563eb','brand-50':'#eef3ff','brand-100':'#dbe6ff','brand-700':'#1d4ed8',navy:'#0f172a',sidebar:'#0f172a','sidebar-hover':'#1e293b','sidebar-active':'#2563eb','sidebar-ink':'#cbd5e1','sidebar-faint':'#64748b',good:'#10b981',warn:'#d97706',serious:'#dc2626'}
+  const tokens:Record<string,string>={ink:'#0b1220',canvas:'#f4f6f9',surface:'#ffffff',line:'#e5e8ee','line-strong':'#d3d8e2',muted:'#475569',faint:'#5b6b80',brand:'#2563eb','brand-50':'#eef3ff','brand-100':'#dbe6ff','brand-700':'#1d4ed8',navy:'#0f172a',sidebar:'#0f172a','sidebar-hover':'#1e293b','sidebar-active':'#2563eb','sidebar-ink':'#cbd5e1','sidebar-faint':'#94a3b8',good:'#10b981','emerald-brand':'#047857',warn:'#b45309',serious:'#b91c1c'}
   for(const [name,value] of Object.entries(tokens))assert.ok(theme.includes(`--color-${name}: ${value};`),name)
   for(const [i,color] of ['#2563eb','#10b981','#f59e0b','#8b5cf6'].entries())assert.ok(theme.includes(`--chart-${i+1}: ${color};`))
   const dark=css.match(/:root\[data-theme="dark"\] \{([^}]+)\}/)![1]

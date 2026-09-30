@@ -143,7 +143,7 @@ export default function Settings({ onNavigate }: { onNavigate?: (key: ModuleKey)
               <HelpingHand className="w-5 h-5" />{t('Tax assistant')}</h2>
             <div className="space-y-3.5">
               <p className="text-[12px] text-muted">{t('Regional guidance shown on invoice and estimate forms. Bundled with the app, no internet needed.')}</p>
-              <label className="flex items-center gap-2 text-[13px] text-ink">
+              <label className="flex min-h-12 items-center gap-2 text-[13px] text-ink">
                 <input type="checkbox" checked={assistant} onChange={e => void updateSettings({ taxAssistantVisible: e.target.checked }).catch(error => void showAlert(errorText(error)))} />
                 {t('Tax assistant')}
               </label>
@@ -190,21 +190,21 @@ export default function Settings({ onNavigate }: { onNavigate?: (key: ModuleKey)
               <Shield className="w-5 h-5" />{t("Privacy & Offline")}</h2>
             <div className="space-y-3 text-[13px] text-muted">
               <div className="flex items-start gap-2">
-                <span className="w-1.5 h-1.5 bg-good-500 rounded-full mt-2"></span>
+                <span className="w-1.5 h-1.5 bg-good rounded-full mt-2"></span>
                 <div>
                   <p className="font-medium text-ink">{t("100% Local • Offline")}</p>
                   <p className="text-[12px] mt-0.5">{t("Your data stays on device. No cloud, no subscription.")}</p>
                 </div>
               </div>
               <div className="flex items-start gap-2">
-                <span className="w-1.5 h-1.5 bg-good-500 rounded-full mt-2"></span>
+                <span className="w-1.5 h-1.5 bg-good rounded-full mt-2"></span>
                 <div>
                   <p className="font-medium text-ink">{t("Works Offline")}</p>
                   <p className="text-[12px] mt-0.5">{t("Airplane mode ready. Create invoice → PDF → Share")}</p>
                 </div>
               </div>
               <div className="flex items-start gap-2">
-                <span className="w-1.5 h-1.5 bg-good-500 rounded-full mt-2"></span>
+                <span className="w-1.5 h-1.5 bg-good rounded-full mt-2"></span>
                 <div>
                   <p className="font-medium text-ink">{t("No Tracking")}</p>
                   <p className="text-[12px] mt-0.5">{t("No analytics, no tracking. Your business is private.")}</p>
@@ -240,7 +240,7 @@ export default function Settings({ onNavigate }: { onNavigate?: (key: ModuleKey)
               <div className="mt-4 space-y-2 border-t border-line pt-3">
                 {links.map(link => (
                   <a key={link.label} href={link.href} target={link.external ? '_blank' : undefined} rel={link.external ? 'noopener noreferrer' : undefined}
-                    className="flex min-h-12 items-center justify-between gap-3 rounded-lg bg-brand-50 px-3.5 py-2 text-[13px] font-medium text-brand transition-colors hover:bg-brand-100">
+                    className="flex min-h-12 items-center justify-between gap-3 rounded-lg bg-brand-50 px-3.5 py-2 text-[13px] font-medium text-brand-700 transition-colors hover:bg-brand-100">
                     <span>{t(link.label)}</span>
                     <ExternalLink className="w-4 h-4 shrink-0" aria-hidden="true" />
                   </a>

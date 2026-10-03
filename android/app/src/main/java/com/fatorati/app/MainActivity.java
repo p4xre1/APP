@@ -2,6 +2,7 @@ package com.fatorati.app;
 
 import android.os.Bundle;
 import android.view.WindowManager;
+import android.webkit.WebView;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
@@ -12,5 +13,12 @@ public class MainActivity extends BridgeActivity {
         }
         registerPlugin(ScreenSecurityPlugin.class);
         super.onCreate(savedInstanceState);
+        WebView.setWebContentsDebuggingEnabled(false);
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        WebView.setWebContentsDebuggingEnabled(false);
     }
 }

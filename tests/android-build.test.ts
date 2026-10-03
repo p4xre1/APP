@@ -130,10 +130,14 @@ test('R8/ProGuard and Vite bundle obfuscation harden both native and WebView cod
   assert.match(viteConfig, /assetFileNames:\s*'assets\/a-\[hash\]\[extname\]'/)
   assert.match(viteConfig, /fatorati-obfuscate-bundle/)
 
-  // Native MainActivity and Capacitor config lock out WebView debugging and bridge logging.
+  // Native MainActivity and Capacitor config lock out WebView debugging and bridge logging,
+  // and encode SharedPreferences identifiers instead of leaving plain-text string literals.
   const mainActivity = readFileSync('android/app/src/main/java/com/fatorati/app/MainActivity.java', 'utf8')
+  const screenSecurity = readFileSync('android/app/src/main/java/com/fatorati/app/ScreenSecurityPlugin.java', 'utf8')
   const capacitorConfig = readFileSync('capacitor.config.ts', 'utf8')
   assert.match(mainActivity, /WebView\.setWebContentsDebuggingEnabled\(false\)/)
+  assert.equal(mainActivity.includes('"FatoratiSecurity"'), false)
+  assert.equal(screenSecurity.includes('"FatoratiSecurity"'), false)
   assert.match(capacitorConfig, /webContentsDebuggingEnabled:\s*false/)
   assert.match(capacitorConfig, /loggingBehavior:\s*'none'/)
 })

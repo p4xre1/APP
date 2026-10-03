@@ -97,23 +97,65 @@ function obfuscateJavaScriptSource(code: string, id: string): string | null {
   const idxMask = ((seed >>> 7) ^ 0x25a3c9) & 0x3fffff || 0x1a2b3c
   const sf = ts.createSourceFile(id, code, ts.ScriptTarget.ESNext, true, ts.ScriptKind.JS)
 
+  const namespaceImports = new Set<string>()
+  for (const stmt of sf.statements) {
+    if (
+      ts.isImportDeclaration(stmt) &&
+      stmt.importClause?.namedBindings &&
+      ts.isNamespaceImport(stmt.importClause.namedBindings)
+    ) {
+      namespaceImports.add(stmt.importClause.namedBindings.name.text)
+    }
+  }
+
+  const isConvertiblePropertyAccess = (node: ts.PropertyAccessExpression): boolean => {
+    if (!ts.isIdentifier(node.name) || node.name.text.length === 0) return false
+    if (ts.isMetaProperty(node.expression) || node.expression.kind === ts.SyntaxKind.SuperKeyword) return false
+    if (ts.isIdentifier(node.expression) && namespaceImports.has(node.expression.text)) return false
+    return true
+  }
+
   const rawStrings = new Set<string>()
   const collect = (node: ts.Node): void => {
     if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) return
     if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) return
-    if (ts.isTemplateExpression(node) && !ts.isTaggedTemplateExpression(node.parent)) {
-      if (node.head.text.length > 0) rawStrings.add(node.head.text)
-      for (const span of node.templateSpans) {
-        if (span.literal.text.length > 0) rawStrings.add(span.literal.text)
-      }
+    if (ts.isPropertyAccessExpression(node) && isConvertiblePropertyAccess(node)) {
+      rawStrings.add(node.name.text)
     } else if (
       ts.isPropertyAssignment(node) &&
-      ts.isStringLiteral(node.name) &&
+      (ts.isStringLiteral(node.name) || ts.isIdentifier(node.name)) &&
       node.name.text.length > 0 &&
       node.parent &&
       ts.isObjectLiteralExpression(node.parent)
     ) {
       rawStrings.add(node.name.text)
+    } else if (
+      ts.isShorthandPropertyAssignment(node) &&
+      node.name.text.length > 0 &&
+      node.parent &&
+      ts.isObjectLiteralExpression(node.parent)
+    ) {
+      rawStrings.add(node.name.text)
+    } else if (
+      ts.isBindingElement(node) &&
+      !node.dotDotDotToken &&
+      node.parent &&
+      ts.isObjectBindingPattern(node.parent)
+    ) {
+      if (!node.propertyName && ts.isIdentifier(node.name) && node.name.text.length > 0) {
+        rawStrings.add(node.name.text)
+      } else if (
+        node.propertyName &&
+        (ts.isIdentifier(node.propertyName) || ts.isStringLiteral(node.propertyName)) &&
+        node.propertyName.text.length > 0
+      ) {
+        rawStrings.add(node.propertyName.text)
+      }
+    } else if (ts.isTemplateExpression(node) && !ts.isTaggedTemplateExpression(node.parent)) {
+      if (node.head.text.length > 0) rawStrings.add(node.head.text)
+      for (const span of node.templateSpans) {
+        if (span.literal.text.length > 0) rawStrings.add(span.literal.text)
+      }
     } else if (
       (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) &&
       isTransformableStringLiteral(node)
@@ -137,9 +179,18 @@ function obfuscateJavaScriptSource(code: string, id: string): string | null {
       if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) return node
       if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) return node
 
+      if (ts.isPropertyAccessExpression(node) && isConvertiblePropertyAccess(node)) {
+        transformed = true
+        const visitedTarget = ts.visitNode(node.expression, visit) as ts.Expression
+        const keyExpr = callPool(node.name.text)
+        return node.questionDotToken
+          ? ts.factory.createElementAccessChain(visitedTarget, node.questionDotToken, keyExpr)
+          : ts.factory.createElementAccessExpression(visitedTarget, keyExpr)
+      }
+
       if (
         ts.isPropertyAssignment(node) &&
-        ts.isStringLiteral(node.name) &&
+        (ts.isStringLiteral(node.name) || ts.isIdentifier(node.name)) &&
         node.name.text.length > 0 &&
         node.parent &&
         ts.isObjectLiteralExpression(node.parent)
@@ -151,6 +202,58 @@ function obfuscateJavaScriptSource(code: string, id: string): string | null {
           ts.factory.createComputedPropertyName(callPool(node.name.text)),
           visitedInit,
         )
+      }
+
+      if (
+        ts.isShorthandPropertyAssignment(node) &&
+        node.name.text.length > 0 &&
+        node.parent &&
+        ts.isObjectLiteralExpression(node.parent)
+      ) {
+        transformed = true
+        const visitedInit = node.objectAssignmentInitializer
+          ? (ts.visitNode(node.objectAssignmentInitializer, visit) as ts.Expression)
+          : undefined
+        return ts.factory.createPropertyAssignment(
+          ts.factory.createComputedPropertyName(callPool(node.name.text)),
+          visitedInit
+            ? ts.factory.createBinaryExpression(node.name, ts.SyntaxKind.EqualsToken, visitedInit)
+            : node.name,
+        )
+      }
+
+      if (
+        ts.isBindingElement(node) &&
+        !node.dotDotDotToken &&
+        node.parent &&
+        ts.isObjectBindingPattern(node.parent)
+      ) {
+        const visitedInit = node.initializer ? (ts.visitNode(node.initializer, visit) as ts.Expression) : undefined
+        const visitedName = ts.visitNode(node.name, visit) as ts.BindingName
+        if (!node.propertyName && ts.isIdentifier(node.name) && node.name.text.length > 0) {
+          transformed = true
+          return ts.factory.updateBindingElement(
+            node,
+            undefined,
+            ts.factory.createComputedPropertyName(callPool(node.name.text)),
+            visitedName,
+            visitedInit,
+          )
+        }
+        if (
+          node.propertyName &&
+          (ts.isIdentifier(node.propertyName) || ts.isStringLiteral(node.propertyName)) &&
+          node.propertyName.text.length > 0
+        ) {
+          transformed = true
+          return ts.factory.updateBindingElement(
+            node,
+            undefined,
+            ts.factory.createComputedPropertyName(callPool(node.propertyName.text)),
+            visitedName,
+            visitedInit,
+          )
+        }
       }
 
       if (ts.isTemplateExpression(node) && !ts.isTaggedTemplateExpression(node.parent)) {
@@ -216,9 +319,10 @@ function obfuscateJavaScriptSource(code: string, id: string): string | null {
 
 /**
  * Production code protection for the WebView bundle packaged into the APK:
- * - Encodes all i18n dictionary payloads and per-module string literals into
- *   shuffled, XOR-scrambled binary tables decoded in memory without eval()
- *   (preserving the strict `script-src 'self'` Content-Security-Policy).
+ * - Encodes all i18n dictionary payloads, per-module string literals, object
+ *   property keys, destructuring keys, and member accesses into shuffled,
+ *   XOR-scrambled binary tables decoded in memory without eval() (preserving
+ *   the strict `script-src 'self'` Content-Security-Policy).
  * - Masks string table indices and integer constants via bitwise XOR expressions.
  * - Hashes all output chunk/asset filenames so source module names are never
  *   exposed in `assets/public/assets/`.

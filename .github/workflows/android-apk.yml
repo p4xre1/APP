@@ -171,10 +171,33 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Verify R8 obfuscation and web bundle code protection
+        working-directory: android
+        run: |
+          set -euo pipefail
+          mapping="app/build/outputs/mapping/release/mapping.txt"
+          test -s "$mapping" || { echo "::error::R8 release mapping file $mapping is missing or empty"; exit 1; }
+          if find app/src/main/assets/public -name '*.map' | grep -q .; then
+            echo "::error::source map (.map) files must never ship inside the APK assets"
+            exit 1
+          fi
+          for leaked in Invoices Customers Subscriptions Notebook useFatorati backup-format TaxGuide invoice-pdf; do
+            if find app/src/main/assets/public/assets -name "*${leaked}*" | grep -q .; then
+              echo "::error::unhashed source module name '$leaked' found in APK web assets"
+              exit 1
+            fi
+          done
+
       - uses: actions/upload-artifact@v7
         with:
           name: fatorati-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: fatorati-apk-release-unsigned
+          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v7

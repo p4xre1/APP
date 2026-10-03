@@ -25,6 +25,7 @@ const config: CapacitorConfig = {
     backgroundColor: '#f4f6f9',
     captureInput: true,
     webContentsDebuggingEnabled: false,
+    loggingBehavior: 'none',
   },
 }
 

@@ -95,3 +95,49 @@ test('the manifest, the Capacitor config and Gradle agree on the package', () =>
   assert.match(manifest, /android:fullBackupContent="false"/)
   assert.match(manifest, /android:dataExtractionRules="@xml\/data_extraction_rules"/)
 })
+
+test('R8/ProGuard and Vite bundle obfuscation harden both native and WebView code', async () => {
+  const gradleProperties = readFileSync('android/gradle.properties', 'utf8')
+  const proguardRules = readFileSync('android/app/proguard-rules.pro', 'utf8')
+  const viteConfig = readFileSync('vite.config.ts', 'utf8')
+
+  // R8 full mode and resource optimizations must be enabled.
+  assert.match(gradleProperties, /^android\.enableR8\.fullMode=true$/m)
+  assert.match(gradleProperties, /^android\.enableResourceOptimizations=true$/m)
+
+  // Both debug and release build types run R8 minification and resource shrinking,
+  // and `.map` source maps are excluded from packaged assets.
+  assert.match(appGradle, /ignoreAssetsPattern\s*=.*!\*\.map/)
+  assert.match(appGradle, /debug\s*\{[\s\S]*?minifyEnabled\s+true[\s\S]*?shrinkResources\s+true/)
+  assert.match(appGradle, /release\s*\{[\s\S]*?minifyEnabled\s+true[\s\S]*?shrinkResources\s+true[\s\S]*?debugSymbolLevel\s+'NONE'/)
+
+  // ProGuard/R8 rules repackage obfuscated classes, rename SourceFile, strip Log calls,
+  // and keep only plugin constructors and annotated bridge/callback methods (never `{ *; }`).
+  assert.match(proguardRules, /-repackageclasses\s+'o'/)
+  assert.match(proguardRules, /-allowaccessmodification/)
+  assert.match(proguardRules, /-overloadaggressively/)
+  assert.match(proguardRules, /-renamesourcefileattribute\s+SourceFile/)
+  assert.match(proguardRules, /-assumenosideeffects\s+class\s+android\.util\.Log/)
+  assert.match(proguardRules, /@com\.getcapacitor\.annotation\.ActivityCallback\s+<methods>;/)
+  assert.match(proguardRules, /@com\.getcapacitor\.annotation\.PermissionCallback\s+<methods>;/)
+  assert.equal(/-keep\s+@com\.getcapacitor\.annotation\.CapacitorPlugin\s+class\s+\*\s*\{\s*\*;\s*\}/.test(proguardRules), false)
+
+  // Vite production build disables sourcemaps, hashes chunk/asset names, and runs
+  // the AST string/constant obfuscator without introducing eval().
+  assert.match(viteConfig, /sourcemap:\s*false/)
+  assert.match(viteConfig, /entryFileNames:\s*'assets\/c-\[hash\]\.js'/)
+  assert.match(viteConfig, /chunkFileNames:\s*'assets\/c-\[hash\]\.js'/)
+  assert.match(viteConfig, /assetFileNames:\s*'assets\/a-\[hash\]\[extname\]'/)
+  assert.match(viteConfig, /fatorati-obfuscate-bundle/)
+
+  // Native MainActivity and Capacitor config lock out WebView debugging and bridge logging,
+  // and encode SharedPreferences identifiers instead of leaving plain-text string literals.
+  const mainActivity = readFileSync('android/app/src/main/java/com/fatorati/app/MainActivity.java', 'utf8')
+  const screenSecurity = readFileSync('android/app/src/main/java/com/fatorati/app/ScreenSecurityPlugin.java', 'utf8')
+  const capacitorConfig = readFileSync('capacitor.config.ts', 'utf8')
+  assert.match(mainActivity, /WebView\.setWebContentsDebuggingEnabled\(false\)/)
+  assert.equal(mainActivity.includes('"FatoratiSecurity"'), false)
+  assert.equal(screenSecurity.includes('"FatoratiSecurity"'), false)
+  assert.match(capacitorConfig, /webContentsDebuggingEnabled:\s*false/)
+  assert.match(capacitorConfig, /loggingBehavior:\s*'none'/)
+})

@@ -33,6 +33,10 @@ export default function SecurityGate({ children }: {children:ReactNode}) {
     return()=>{active=false}
   },[unlocked])
   useEffect(()=>{
+    const unsubscribeDesktopLock=window.fatoratiDesktop?.onLock(lockVault)
+    return()=>unsubscribeDesktopLock?.()
+  },[])
+  useEffect(()=>{
     let last=Date.now()
     const activity=()=>{last=Date.now()}
     const background=()=>{if(document.visibilityState==='hidden')lockVault()}

@@ -1,8 +1,8 @@
-# Fatorati 2 — Android offline
+# Fatorati 2 — Android and desktop offline
 
-Capacitor 8, React 19, Vite 8, pnpm. App ID: `com.fatorati.app`. Version 2.2.0. No accounts, analytics, remote translation, cloud SDKs, rate services, PWA, service workers, or runtime network features. The Android app does **not declare INTERNET**. Android automatic backups and device extraction are excluded. Sharing is an explicit handoff to an app the user chooses; the receiving app can use its own connection.
+Capacitor 8, Electron 44, React 19, Vite 8, pnpm. Android app ID: `com.fatorati.app`; desktop app ID: `com.fatorati.desktop`. Version 2.2.0. The desktop edition packages the same encrypted offline application for Windows, macOS and Linux; see [`docs/DESKTOP.md`](docs/DESKTOP.md) for development and installer commands. No accounts, analytics, remote translation, cloud SDKs, rate services, PWA, service workers, or runtime network features. The Android app does **not declare INTERNET**. Android automatic backups and device extraction are excluded. Sharing is an explicit handoff to an app the user chooses; the receiving app can use its own connection.
 
-**Your data lives only on this phone. Uninstalling the app deletes it. Export a backup regularly.**
+**Your data lives only on this device. Uninstalling the app deletes it. Export a backup regularly.**
 
 ## Invoicing workflow (2.1.0)
 

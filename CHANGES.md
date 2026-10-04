@@ -1,3 +1,134 @@
+# Unreleased — construction law & tax content + a 1099-NEC check
+
+Built from construction law and tax research re-checked on 2026-10-03; every figure
+is recorded with its source in REVIEW-NEEDED.md.
+
+- Tax guide, Morocco: a new **Construction and public works** section — 20% TVA on
+  building work with only two rates since 1 January 2026, the social housing
+  exemption (Art. 92-I-28° CGI), the retenue de garantie (10% of each interim
+  payment, capped at 7%, surety option, mainlevée after réception définitive), the
+  60-day public payment deadline with intérêts moratoires (Decree 2-16-344), the
+  "retention is not a discount" accounting rule, and the subcontracting conditions.
+- Tax guide, United States: a new **Contractors and construction** section — the
+  contractor-as-consumer rule for incorporated materials with its reseller
+  exceptions (separated contracts, capital improvement vs repair), retainage caps
+  and flow-down, the same "retention is a receivable" rule, and W-9/1099-NEC
+  practice (2,000 USD, corporate exemption, 1099-K for card payments).
+- Tax guide, e-invoicing: the section now names **Article 145-IX** as the legal
+  foundation (computerized invoicing, modalities by regulatory text), separates it
+  from Articles 145-I and 145-III, and labels the **universal effective date,
+  turnover threshold and penalty as NOT VERIFIED** - the draft implementing decree
+  had reached the SGG, no date binds anyone, so the app states none. The
+  auto-entrepreneur/CPU exclusion is shipped as *reported*, with its usual citation
+  (Article 145-X/145-XI) flagged for the CGI text.
+- Reports: a US-only **Contractor payments (1099-NEC check)** card backed by
+  `src/lib/contractor-payments.ts` — it groups the year's recorded Expenses per
+  vendor, flags 2,000 USD or more, and states plainly that it counts what was
+  recorded, never who must be reported.
+- 20 new strings in all five languages; the guide's reviewed date is now
+  2026-10-03; new tests cover the guide content, the grouping/threshold logic and
+  the card's US-only rendering.
+
+## Same release — facts from the owner's research file
+
+The owner's research file (CGI 2026, Finance Laws 2024-2026, CNSS, Labour Code, DGI
+practice) was applied after checking every figure; four of its values were wrong or
+outdated and the verified value shipped instead (the corrections are recorded in
+REVIEW-NEEDED.md).
+
+- Morocco guide gains four sections: **Employing staff** (CNSS 21.09% employer /
+  6.74% employee with the 6,000 MAD cap caveat, SMIG 17.92 MAD/h and SMAG
+  97.44 MAD/day from Decree 2.25.983, compulsory work-accident insurance, the salary
+  abatement and dependant deduction, and the Labour Code pointer),
+  **Paying a non-resident** (Article 15 categories, 10% domestic rate, dividends
+  11.25% in 2026, treaty check, who carries the liability), **Audits, late filing and
+  appeals** (4-year window, 10 for fraud, 5/15/20% declaration majorations and
+  0.5%/month late payment), and **Company taxes and formalities** (cotisation
+  minimale base HT, registration duty on capital, commune-set local taxes).
+- The rates section now cites **Article 99 CGI** and names the transitional
+  exceptions that a decree keeps (energy, transport).
+- United States contractors section gains the state-specific licensing, mechanics-lien
+  and preliminary-notice warning.
+- The file's suggested multi-country tax/treaty data model is deliberately NOT
+  implemented: it would need verified per-country rates, which the app cannot ship as
+  information. Recorded as a candidate feature in REVIEW-NEEDED.md.
+- 23 more strings in all five languages; the tax-guide tests now assert every new
+  figure and article reference.
+
+## Same release — facts from the owner's second research file
+
+- Morocco guide gains the 2026 **company income tax** rates (20% below 100 million MAD
+  of profit, 35% at/above, 40% for banks and insurers, 20% for CFC and industrial
+  acceleration zones - proportional, and never computed by the app), the **cotisation
+  minimale** at **0.25%** of the HT base with its 3,000 MAD floor and 36-month start
+  exemption, the **VAT filing deadline** (20th of the following month, monthly above
+  1,000,000 MAD), the **franchise** caution on whether TVA applies at all, and the
+  **5% rent withholding** from 1 July 2026. The salary bullet adds the 40,000 MAD
+  exemption threshold and the 37% top rate.
+- Four file figures were wrong or unverifiable and did NOT ship: the 0.75% cotisation
+  minimale (0.25%), the 300k/500k VAT registration thresholds (sources conflict - no
+  number shipped), the 0.5%/3,000 MAD registration duty (no hard figure shipped; the
+  earlier 300/20,000 scale was removed too), the 1%/month late interest (stays
+  0.5%/month with the 5/15/20% majorations) and the 3-year audit window (4 years).
+  The full reconciliation is in REVIEW-NEEDED.md.
+
+## Same release — facts from the owner's third research file
+
+- `formalities` gains the **company income tax calendar** (return and balance within
+  3 months of year end; four 25% advance payments on 31 March, 30 June,
+  30 September, 31 December — CGI arts. 20, 169) and the **cash-settlement
+  deductibility cap** (expenses not paid by crossed cheque, transfer or electronic
+  means deductible only up to 5,000 MAD/day and 50,000 MAD/month per supplier,
+  art. 11-II, excess added back with a 6% fine). Both verified against several 2026
+  sources.
+- Everything else the file added was either already shipped or contradicted by
+  verified sources: an outdated IR bracket table (0-34%), a French-law severance
+  formula, VAT filed "by the 30th" (it is the 20th), a third conflicting registration
+  duty scale, and unverified details (VAT refund rule, Art. 15-bis withholding
+  categories, criminal fine amounts). The reconciliation is in REVIEW-NEEDED.md.
+- The same pass added three verified facts to the guide: the **CNSS family allowances**
+  (300 MAD/month for each of the first three children, 36 MAD for the next three, six
+  children maximum, funded by the employer's 6.40% contribution - the file's "100 MAD"
+  is wrong), the **CSS solidarity contribution** on profits (starts at 1,000,000 MAD of
+  net taxable profit, bands 1.5% / 2.5% / 3.5% / 5%, not deductible, extended through
+  2028 by the 2026 Finance Law) and the **company-law minimum capital** (a SARL has no
+  legal minimum, an SA needs 300,000 MAD, 3,000,000 MAD if it offers shares to the
+  public).
+- Fixed during that pass: a shared-anchor replace had copied the four Morocco sections
+  (employing staff, non-residents, audits, formalities) into the US guide as well. They
+  are removed, the US guide is back to its eight sections, and `tests/tax-guide.test.ts`
+  now asserts each region's section ids and that no Morocco marker (CNSS, CGI, SARL,
+  cotisation minimale) appears in the US guide. Never released.
+
+# Unreleased — bug fixes (line discounts, logo import, local dates)
+
+Three defects found by a full source scan, each now covered by a regression test.
+
+- **Line discounts were dropped by record normalisation.** `normalizeRecord()` is on
+  the normal write path (`db.add`/`db.update`) and on import/export, and it rebuilt
+  every line total as quantity × unit price: a discounted invoice printed a line that
+  contradicted its own subtotal, a restored backup rewrote the discounted amount, and
+  a notes-only edit of an issued discounted invoice was refused as an `items` change.
+  The line total now follows the one rule (`format.lineTotal`), the renderer derives
+  the printed total from the line itself (so records written by an older build still
+  add up), and the issued-document lock compares what a line *says* - quantity, price,
+  discount, description - instead of its derived total.
+- **"Choose logo" / "Choose stamp" in Settings did nothing.** The effect that applies
+  the picked file read the target from a state closure that the same effect had
+  already reset while the OS file dialog was still open, and `takePickedLogo()` had
+  consumed the file by the time the dialog closed. The target now travels with the
+  file (`pickLogo(file, target)`), exactly like the backup picker's import mode, and
+  logo picks have their own listener set, so they never wake a backup import.
+- **New documents are dated from the device's local calendar**, not the UTC day: new
+  invoices, estimates, invoices converted from an estimate, credit notes,
+  subscription start dates, the due-date fallback, the sample preview and the export
+  file names. A source-audit test now rejects `new Date().toISOString().slice(0, 10)`
+  as a date default, so the UTC day cannot creep back in.
+
+7 new tests: discount round-trip through the database and a backup, a discounted row
+written by an older build rendering correctly, the issued-document lock, the image
+picker handoff, and the local-date policy.
+
 # Unreleased — professional invoice builder
 
 The invoice form becomes a full builder while keeping ONE invoice entity,

@@ -2,10 +2,18 @@
 // after the same delay), plus the advisory Moroccan payment-terms levels.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { clampDueDays, DEFAULT_DUE_DAYS, paymentTermsGap, paymentTermsLevel } from '../src/lib/status'
+import { clampDueDays, DEFAULT_DUE_DAYS, dueDateFromTerms, paymentTermsGap, paymentTermsLevel } from '../src/lib/status'
+import { isISODate, todayISO } from '../src/lib/subscriptions'
 import { validateBackup, encodeBackup, decodeBackup } from '../src/lib/backup-format'
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { fixture } from './fixtures'
 import type { FatoratiBackup } from '../src/lib/db'
+
+function sources(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true })
+    .flatMap(entry => (entry.isDirectory() ? sources(join(directory, entry.name)) : [join(directory, entry.name)]))
+}
 
 test('clampDueDays: whole days 0–365, anything else falls back to the old 30', () => {
   assert.equal(DEFAULT_DUE_DAYS, 30)
@@ -47,4 +55,37 @@ test('defaultDueDays is validated in backups and survives a round-trip', async (
     source.settings[0].defaultDueDays = bad as unknown as number
     assert.throws(() => validateBackup(source), /Invalid backup record/, String(bad))
   }
+})
+
+test('a due date is issue date + days on the calendar, and the fallback is the LOCAL day', () => {
+  assert.equal(dueDateFromTerms('2026-10-03', 0), '2026-10-03')
+  assert.equal(dueDateFromTerms('2026-10-03', 30), '2026-11-02')
+  assert.equal(dueDateFromTerms('2026-12-31', 30), '2027-01-30') // across a year end
+  assert.equal(dueDateFromTerms('2028-02-27', 1), '2028-02-28')
+  assert.equal(dueDateFromTerms('2026-10-03', 400), '2026-11-02', 'a malformed term falls back to 30')
+  // A malformed issue date falls back to today in the device's local calendar, never
+  // to the UTC day (the two differ either side of midnight).
+  const before = todayISO()
+  const fallback = dueDateFromTerms('nonsense', 0)
+  const after = todayISO()
+  assert.ok(fallback === before || fallback === after, `${fallback} is not the local day`)
+  assert.ok(isISODate(fallback))
+})
+
+test('no source derives "today" from the UTC clock: the local day comes from todayISO()', () => {
+  // `new Date().toISOString().slice(0, 10)` is the UTC day. It dated new invoices,
+  // estimates and subscriptions tomorrow (west of UTC) or yesterday (east of UTC)
+  // while the lists, overdue badges and reminders all read the local day, and it can
+  // even disagree with the local year inside a `PREFIX-YYYY` document number.
+  const offenders: string[] = []
+  for (const file of sources('src').filter(name => /\.tsx?$/.test(name))) {
+    // notifications.addDays() adds days to an ISO date string (UTC-anchored on
+    // purpose) and never reads the current instant, so it is the one exception.
+    if (file.endsWith('src/lib/notifications.ts')) continue
+    for (const [index, line] of readFileSync(file, 'utf8').split('\n').entries()) {
+      if (!/toISOString\(\)\s*\.\s*slice\(0,\s*10\)/.test(line)) continue
+      if (/\bDate\.now\(\)|new Date\(\)/.test(line)) offenders.push(`${file}:${index + 1}`)
+    }
+  }
+  assert.deepEqual(offenders, [], 'use todayISO() for the local calendar day')
 })

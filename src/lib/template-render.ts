@@ -15,6 +15,7 @@
 import { t } from '../i18n'
 import { accentText, type Language } from './preferences'
 import { formatDate, money, number as formatNumber, roundMoney } from './format'
+import { todayISO } from './subscriptions'
 import type { TaxRegion } from '../store/types'
 import {
   accentHex, columnAlign, columnLabelKey, layoutOf, presetOf, presetSample, templateColumns,
@@ -218,15 +219,20 @@ function lineCell(column: ColumnId, item: InvoiceItem, currency: string, languag
     case 'quantity': return formatNumber(item.quantity, language)
     case 'unitPrice': return money(item.unitPrice, currency, false, language)
     case 'discount': return item.discount ? `${formatNumber(item.discount, language)}%` : ''
-    case 'total': return money(item.total, currency, false, language)
+    case 'total': return money(lineAmount(item, currency), currency, false, language)
   }
 }
 
-/** Sample line of a document line: `total` follows the same rounding as a real one. */
-export function sampleLineTotal(quantity: number, unitPrice: number, discountPercent: number | undefined, currency: string): number {
-  const gross = roundMoney(roundMoney(unitPrice, currency) * quantity, currency)
-  if (!discountPercent) return gross
-  return roundMoney(gross * (1 - discountPercent / 100), currency)
+/**
+ * Printed total of one line: quantity × unit price less the line discount, quantized
+ * to the currency. It is DERIVED, never read from `item.total`, so the table always
+ * agrees with the document subtotal the same rule produced - including a record
+ * written by an older build that stored the undiscounted product.
+ */
+export function lineAmount(line: Pick<InvoiceItem, 'quantity' | 'unitPrice' | 'discount'>, currency: string): number {
+  const gross = roundMoney(roundMoney(line.unitPrice, currency) * line.quantity, currency)
+  if (!line.discount) return gross
+  return roundMoney(gross * (1 - line.discount / 100), currency)
 }
 
 
@@ -296,13 +302,13 @@ export function buildSampleModel(template: DocumentTemplate, language: Language,
     ...(line.unit ? { unit: tr(line.unit) } : {}),
     ...(line.discount ? { discount: line.discount } : {}),
     ...(line.section ? { section: line.section } : {}),
-    total: sampleLineTotal(line.quantity, line.unitPrice, line.discount, currency),
+    total: lineAmount(line, currency),
   }))
   const subtotal = roundMoney(items.reduce((sum, item) => sum + item.total, 0), currency)
   const exempt = presetOf(template).taxExempt === true
   const rate = 20
   const tax = exempt ? 0 : roundMoney(subtotal * (rate / 100), currency)
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayISO()
   const document: Invoice = {
     id: 'sample', number: 'INV-2026-0001', customerId: 'sample-customer',
     items, subtotal, tax, total: roundMoney(subtotal + tax, currency),

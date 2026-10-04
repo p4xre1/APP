@@ -10,7 +10,7 @@ import {
   type DocumentTemplate,
 } from '../src/lib/templates'
 import {
-  approximateMeasure, buildDocumentModel, buildSampleModel, layoutDocument, mandatoryFields, paintPage, pageText,
+  approximateMeasure, buildDocumentModel, buildSampleModel, layoutDocument, lineAmount, mandatoryFields, paintPage, pageText,
   type DocumentPage, type PaintContext, type TextOp,
 } from '../src/lib/template-render'
 import { BACKUP_VERSION, isStoredImage, isTemplateSnapshot, migrateBackup, validateBackup } from '../src/lib/backup-format'
@@ -333,6 +333,27 @@ test('a line discount changes the line total, not the tax rules', () => {
   // The discount column only exists where the preset asks for it.
   assert.ok(templateColumns(template).includes('discount'))
   assert.equal(templateColumns(normalizeTemplate({ presetId: 'general', region: 'MA' }, 'MA')).includes('discount'), false)
+})
+
+test('the printed line total is derived, so a discounted row written by an older build still adds up', () => {
+  // The old write path stored quantity × unit price and ignored the discount: the
+  // table must print the amount the document's own subtotal was computed from.
+  const document = invoice({
+    items: [{ id: 'i1', description: 'Casque audio', quantity: 3, unitPrice: 99.9, discount: 10, total: 299.7 }],
+    subtotal: 269.73, tax: 0, total: 269.73, taxRate: 0,
+  })
+  const template = normalizeTemplate({ layoutId: 'classic', presetId: 'retail', region: 'MA', accent: 'blue' }, 'MA')
+  const model = buildDocumentModel({
+    kind: 'invoice', document, business: completeBusiness(), customer: completeCustomer(),
+    region: 'MA', currency: 'MAD', language: 'fr', template, appAccent: '#2563eb',
+  })
+  const totalColumn = model.columns.findIndex(column => column.id === 'total')
+  assert.equal(model.rows[0].cells[totalColumn], money(269.73, 'MAD', false, 'fr'))
+  assert.equal(model.totals[0].value, money(269.73, 'MAD', false, 'fr'))
+  // One rule for the line total, shared by real rows and by the sample preview.
+  assert.equal(lineAmount({ quantity: 3, unitPrice: 99.9, discount: 10 }, 'MAD'), 269.73)
+  assert.equal(lineAmount({ quantity: 3, unitPrice: 99.9 }, 'MAD'), 299.7)
+  assert.equal(lineAmount({ quantity: 3, unitPrice: 99.9, discount: 0 }, 'MAD'), 299.7)
 })
 
 test('no preset can change a tax rate, remove mandatory content or hide a field', () => {

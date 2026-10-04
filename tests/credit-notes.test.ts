@@ -113,6 +113,28 @@ test('issued documents lock the fields history depends on', () => {
   assert.equal(lockedFieldChanged(invoice({ status: 'sent', taxRate: undefined }), { taxRate: 0 }), null)
 })
 
+test('the derived line total is not history: a form that recomputes it may still save', () => {
+  // Regression: the old write path stored quantity × unit price and dropped the
+  // discount, so the form's correct (discounted) total looked like an edit of the
+  // issued document and every save was refused with "items".
+  const issued = invoice({ number: 'INV-2026-0011', status: 'sent', taxRate: 0,
+    items: [{ id: 'i1', description: 'Casque audio', quantity: 3, unitPrice: 99.9, discount: 10, total: 299.7 }],
+    subtotal: 269.73, tax: 0, total: 269.73 })
+  assert.equal(lockedFieldChanged(issued, {
+    notes: 'relance envoyée', dueDate: '2026-12-31',
+    items: [{ id: 'regenerated', description: 'Casque audio', quantity: 3, unitPrice: 99.9, discount: 10, total: 269.73 }],
+  }), null)
+  // What the line SAYS is still locked: quantity, price and discount.
+  for (const items of [
+    [{ id: 'i1', description: 'Casque audio', quantity: 4, unitPrice: 99.9, discount: 10, total: 359.64 }],
+    [{ id: 'i1', description: 'Casque audio', quantity: 3, unitPrice: 89.9, discount: 10, total: 242.73 }],
+    [{ id: 'i1', description: 'Casque audio', quantity: 3, unitPrice: 99.9, discount: 20, total: 239.76 }],
+    [{ id: 'i1', description: 'Casque Bluetooth', quantity: 3, unitPrice: 99.9, discount: 10, total: 269.73 }],
+  ]) {
+    assert.equal(lockedFieldChanged(issued, { items }), 'items')
+  }
+})
+
 test('credit notes never appear in the calendar', () => {
   const items = collectCalendarItems({
     notes: [], subscriptions: [], estimates: [],

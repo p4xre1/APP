@@ -2,6 +2,10 @@ import { useFatorati } from '../store/useFatorati'
 import { money, number } from '../lib/format'
 import { reportTotals, agedReceivables, taxSummary } from '../lib/reports'
 import { cashFlow, periodRange, type CashFlowPeriod } from '../lib/cash-flow'
+import { contractorPayments } from '../lib/contractor-payments'
+import { settingsRegion } from '../lib/taxGuide'
+import type { Expense, TaxRegion } from '../store/types'
+import { todayISO } from '../lib/subscriptions'
 import { useI18n, usePreferences } from '../i18n'
 import { Fragment, useState } from 'react'
 
@@ -13,7 +17,7 @@ const PERIODS: { id: CashFlowPeriod; label: string }[] = [
 ]
 
 export default function Reports() {
-  const { invoices, expenses, customers } = useFatorati()
+  const { invoices, expenses, customers, settings } = useFatorati()
 
   const { t } = useI18n(), prefs = usePreferences()
   const [period, setPeriod] = useState<CashFlowPeriod>('month')
@@ -22,6 +26,7 @@ export default function Reports() {
   const range = periodRange(period)
   const flows = cashFlow(invoices, expenses, range.from, range.to, prefs.defaultCurrency)
   const taxRows = taxSummary(invoices, expenses, range.from, range.to, prefs.defaultCurrency)
+  const region = settingsRegion(settings)
   const rows = result.totals.length ? result.totals : [{currency:prefs.defaultCurrency,revenue:0,pending:0,overdue:0,received:0,expenses:0,tax:0,counts:{paid:0,sent:0,overdue:0,draft:0,total:0},profit:0}]
 
   return (
@@ -191,12 +196,56 @@ export default function Reports() {
         <p className="text-[12px] text-muted mt-3">{t('An estimate built from settled documents and the tax you recorded on expenses. It is not a declaration — verify every figure with your accountant before filing.')}</p>
       </div>
 
+      <ContractorPaymentsCard region={region} expenses={expenses} currency={prefs.defaultCurrency} />
+
       <div className="bg-surface rounded-xl border border-line p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
         <h2 className="text-[14px] font-bold text-ink mb-4">{t('Converted net total')}</h2>
         <p className="text-2xl font-bold text-ink">{money(result.converted,prefs.defaultCurrency)}</p>
         <p className="text-[13px] text-muted mt-1">{t('Manual rates only')}</p>
         {result.missing > 0 && <p className="text-[13px] text-warn mt-1">{t('Missing rates',{count:number(result.missing)})}</p>}
       </div>
+    </div>
+  )
+}
+
+/**
+ * Form 1099-NEC preparation for a US business: what was paid to each vendor this
+ * year, with the federal threshold flagged. Money out lives in Expenses, so this is
+ * where a contractor's payments to subcontractors are. The card groups what the
+ * user recorded; entity type, card payments and the reporting basis stay the
+ * accountant's call. Morocco has no equivalent, so the card renders for US only.
+ */
+export function ContractorPaymentsCard({ region, expenses, currency }: { region: TaxRegion; expenses: Expense[]; currency: string }) {
+  // The component is rendered unconditionally by the screen; the region gate and the
+  // translation function live here so the card is testable without the store.
+  const { t } = useI18n()
+  if (region !== 'US') return null
+  // Keep the year a string for the placeholder: t() formats numbers with the locale
+  // (2,026) and a calendar year must print as 2026.
+  const year = todayISO().slice(0, 4)
+  const cards = contractorPayments(expenses, Number(year), currency)
+  return (
+    <div className="bg-surface rounded-xl border border-line p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+      <h2 className="text-[14px] font-bold text-ink mb-1">{t('Contractor payments (1099-NEC check)')}</h2>
+      <p className="text-[12px] text-muted mb-4">{t('Expenses recorded to the same vendor in {year}, grouped for the US filing threshold.', { year })}</p>
+      {cards.length === 0
+        ? <p className="text-[13px] text-muted">{t('No vendor expenses recorded this year.')}</p>
+        : <div className="space-y-0">
+            <div className="flex items-center justify-between py-1.5 text-[11.5px] uppercase tracking-[0.06em] text-faint">
+              <span>{t('Vendor')}</span>
+              <span>{t('Paid')}</span>
+            </div>
+            {cards.map(card => <div key={card.vendor} className="flex items-center justify-between gap-3 py-2 border-t border-line">
+              <span className="min-w-0 truncate text-[13px] text-ink">{card.vendor}</span>
+              <span className="flex items-center gap-2 whitespace-nowrap">
+                {card.formDue && <span className="rounded-full bg-warn-50 px-2 py-0.5 text-[11px] font-semibold text-warn">{t('2,000 USD or more')}</span>}
+                <span className="text-[11.5px] text-muted">{number(card.count)} {t('records')}</span>
+                <span className="tnum text-[13px] font-semibold text-ink">{money(card.total, currency)}</span>
+              </span>
+            </div>)}
+          </div>}
+      <p className="text-[12px] text-muted mt-3">{t('Collect a W-9 before the first payment: most corporations are exempt from 1099-NEC, attorneys are not.')}</p>
+      <p className="text-[12px] text-muted mt-1">{t('Card and third-party network payments are reported by the processor on a 1099-K; this card counts what you recorded in Expenses for the current year.')}</p>
     </div>
   )
 }

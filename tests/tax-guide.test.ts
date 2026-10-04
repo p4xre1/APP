@@ -44,7 +44,7 @@ test('both regions ship a dated guide whose strings are translated in all five l
   for (const region of TAX_REGIONS) {
     const guide = guideFor(region)
     assert.equal(guide.region, region)
-    assert.equal(guide.lastReviewed, '2026-09-30')
+    assert.equal(guide.lastReviewed, '2026-10-03')
     assert.equal(guide.lastReviewed, TAX_GUIDE_LAST_REVIEWED)
     assert.ok(guide.sections.length >= 5, `${region} sections`)
     assert.equal(new Set(guide.sections.map(section => section.id)).size, guide.sections.length)
@@ -70,6 +70,11 @@ test('Morocco content covers the rates, Art. 145 content, auto-entrepreneur and 
   assert.match(rates, /1 January 2026/)
   assert.match(rates, /exports/i)
   assert.match(rates, /right to deduct/)
+  assert.match(rates, /Article 99 CGI/)
+  assert.match(rates, /transitional exceptions/)
+  assert.match(rates, /energy and transport/)
+  assert.match(rates, /franchise/)
+  assert.match(rates, /thresholds differ between sales and services/)
 
   const content = body('content')
   assert.match(content, /Art\. 145/)
@@ -113,13 +118,17 @@ test('Morocco content covers the rates, Art. 145 content, auto-entrepreneur and 
   assert.match(records, /keep your backups/)
 
   // E-invoicing must not present a timeline as fact: principle only, then the DGI.
-  // Announced rollout is separated from binding law (decree unpublished at review).
+  // The legal foundation is Article 145-IX; the universal date, threshold and penalty
+  // are labelled NOT VERIFIED and the announced rollout is separated from binding law.
   const eInvoicing = body('e-invoicing')
-  assert.match(eInvoicing, /145-IX/)
+  assert.match(eInvoicing, /Article 145-IX of the CGI/)
+  assert.match(eInvoicing, /NOT VERIFIED/)
+  assert.match(eInvoicing, /Government Secretariat, SGG/)
   assert.match(eInvoicing, /DGI/)
   assert.match(eInvoicing, /structured data/)
   assert.match(eInvoicing, /announced/)
   assert.match(eInvoicing, /unpublished/)
+  assert.equal(/Article 119/.test(eInvoicing), false, 'the unverified Article 119 citation must stay out')
   assert.equal(/\b(?:19|20)\d{2}\b/.test(eInvoicing), false, 'the e-invoicing note must not state a year')
   assert.equal(/\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d/i.test(eInvoicing), false, 'no dated start')
   assert.match(eInvoicing, /no date/)
@@ -127,10 +136,155 @@ test('Morocco content covers the rates, Art. 145 content, auto-entrepreneur and 
   // submission or prior-validation requirement by itself.
   assert.match(eInvoicing, /may not satisfy/)
 
+  // Construction & public works: the standard rate, the retention guarantee with its
+  // two percentages, the public payment deadline and the "retention is not a discount"
+  // accounting rule. Subcontracting keeps its declaration/acceptance condition.
+  const construction = body('construction')
+  assert.match(construction, /20%/)
+  assert.match(construction, /only two rates/)
+  assert.match(construction, /Article 92-I-28/)
+  assert.match(construction, /retenue de garantie/)
+  assert.match(construction, /one tenth \(10%\)/)
+  assert.match(construction, /7% of the initial contract amount/)
+  assert.match(construction, /mainlevée/)
+  assert.match(construction, /60 days/)
+  assert.match(construction, /45 days/)
+  assert.match(construction, /2-16-344/)
+  assert.match(construction, /intérêts moratoires/)
+  assert.match(construction, /not a discount/)
+  assert.match(construction, /subcontractor must be declared/)
+  assert.match(construction, /paid directly by the administration/)
+
+  // Auto-entrepreneurs and CPU taxpayers are reported to be outside the requirement,
+  // and the usually cited 145-X/145-XI exclusion is still flagged for the CGI text.
+  assert.match(eInvoicing, /145-X\/145-XI/)
+  assert.match(eInvoicing, /Contribution Professionnelle Unique/)
+  assert.match(eInvoicing, /needs checking in the CGI text/)
+  // 145-I (electronic accounting) and 145-III (invoice content) must not be confused
+  // with the computerized-invoicing framework.
+  assert.match(eInvoicing, /145-I \(electronic accounting\)/)
+  assert.match(eInvoicing, /145-III \(ordinary invoice content\)/)
+
+  // Payroll: the CNSS shares with the cap caveat, the 2026 minimum wages, the
+  // compulsory work-accident insurance and the Labour Code pointer.
+  const staff = body('employing-staff')
+  assert.match(staff, /21\.09%/)
+  assert.match(staff, /6\.74%/)
+  assert.match(staff, /6,000 MAD monthly cap/)
+  assert.match(staff, /only to the short-term and long-term/)
+  assert.match(staff, /17\.92 MAD per hour/)
+  assert.match(staff, /1 January 2026/)
+  assert.match(staff, /97\.44 MAD per working day/)
+  assert.match(staff, /1 April 2026/)
+  assert.match(staff, /2\.25\.983/)
+  assert.match(staff, /18-12/)
+  assert.match(staff, /35% of annual gross pay up to 78,000 MAD/)
+  assert.match(staff, /35,000 MAD a year/)
+  assert.match(staff, /600 MAD per dependent/)
+  assert.match(staff, /under 40,000 MAD a year pays no tax/)
+  assert.match(staff, /scale runs to 37%/)
+  assert.match(staff, /65-99/)
+  assert.match(staff, /1\.5 working days per month/)
+  // CNSS family allowances: 300 MAD for the first three children, 36 MAD for the next three.
+  assert.match(staff, /300 MAD per month for each of the first three children/)
+  assert.match(staff, /36 MAD per child for the next three/)
+  assert.match(staff, /six children maximum/)
+  assert.match(staff, /6\.40% contribution funds them/)
+
+  // Non-resident payments: the Article 15 categories, the verified domestic rates,
+  // the treaty check and whose liability it is.
+  const nonResidents = body('non-residents')
+  assert.match(nonResidents, /Article 15/)
+  assert.match(nonResidents, /10% of the gross amount/)
+  assert.match(nonResidents, /11\.25% for 2026 distributions, 10% from 2027/)
+  assert.match(nonResidents, /treaty may reduce or exempt/)
+  assert.match(nonResidents, /certificate of tax residence/)
+  assert.match(nonResidents, /exposes YOU to the tax/)
+
+  // Audits: the reassessment window and the late-filing/payment scale.
+  const audits = body('audits')
+  assert.match(audits, /four years \(Article 226 CGI\)/)
+  assert.match(audits, /ten years in case of fraud \(Article 228\)/)
+  assert.match(audits, /5% of the tax up to 30 days/)
+  assert.match(audits, /15%/)
+  assert.match(audits, /20%/)
+  assert.match(audits, /0\.5% per further month \(Article 208 CGI\)/)
+  assert.match(audits, /tax tribunal/)
+  assert.match(audits, /20th of the month after the period/)
+  assert.match(audits, /passes 1,000,000 MAD/)
+  assert.match(audits, /quarterly below it/)
+
+  // Company taxes: the cotisation minimale base (HT, never VAT), the registration
+  // duty scale and the no-single-rate warning for the local taxes.
+  const formalities = body('formalities')
+  // Company income tax: the 2026 proportional rates and the threshold effect.
+  assert.match(formalities, /20% of net taxable profit below 100 million MAD/)
+  assert.match(formalities, /35% at or above it/)
+  assert.match(formalities, /40% for banks and insurers/)
+  assert.match(formalities, /proportional, not progressive/)
+  assert.match(formalities, /never computes income tax/)
+  // Cotisation minimale: 0.25% on the HT base, 3,000 MAD floor, 36-month start.
+  assert.match(formalities, /EXCLUDING tax \(HT\)/)
+  assert.match(formalities, /Article 144 CGI/)
+  assert.match(formalities, /0\.25% \(0\.15% in regulated sectors\)/)
+  assert.match(formalities, /floor of 3,000 MAD even in a loss year/)
+  assert.match(formalities, /first 36 months/)
+  // Registration duty: no hard figure can be shipped - the sources disagree - so the
+  // bullet names the widely cited anchor and sends the user to the notary.
+  assert.match(formalities, /commonly cited as 1% of the amount with a 1,000 MAD minimum/)
+  assert.match(formalities, /exemptions for company-creation acts/)
+  assert.match(formalities, /confirm the amount before budgeting/)
+  assert.equal(/20,000 MAD maximum/.test(formalities), false, 'the unverified 300/20,000 scale must be gone')
+  // Deadlines: the return window and the four advance payments.
+  assert.match(formalities, /within three months of the year end \(31 March\)/)
+  assert.match(formalities, /four advance payments of 25% each/)
+  assert.match(formalities, /31 March, 30 June, 30 September and 31 December/)
+  assert.match(formalities, /Articles 20 and 169 CGI/)
+  assert.match(formalities, /keeps no filing calendar/)
+  // Cash settlement: the 5,000/day and 50,000/month deductibility caps.
+  assert.match(formalities, /settled by crossed cheque, bank transfer, bill of exchange or electronic means/)
+  assert.match(formalities, /5,000 MAD per day and per supplier/)
+  assert.match(formalities, /50,000 MAD per month and per supplier/)
+  assert.match(formalities, /Article 11-II CGI/)
+  assert.match(formalities, /6% fine/)
+  // Rent withholding and the local taxes with no national rate.
+  assert.match(formalities, /withholds 5% at source on rent/)
+  assert.match(formalities, /1 July 2026/)
+  assert.match(formalities, /47-06/)
+  assert.match(formalities, /no single national rate/)
+  // Solidarity contribution on profits: the 1,000,000 MAD trigger, the four bands,
+  // the non-deductibility and the 2028 extension.
+  assert.match(formalities, /solidarity contribution on profits \(CSS\)/)
+  assert.match(formalities, /reaches 1,000,000 MAD/)
+  assert.match(formalities, /1\.5% up to 5 million, 2\.5% up to 10 million, 3\.5% up to 40 million, 5% above/)
+  assert.match(formalities, /not deductible/)
+  assert.match(formalities, /extended it through 2028/)
+  // Company-law minimums: a SARL has none; an SA needs 300,000 MAD (3,000,000 if listed).
+  assert.match(formalities, /SARL has no legal minimum capital/)
+  assert.match(formalities, /at least 300,000 MAD \(3,000,000 if it offers shares to the public\)/)
+  assert.equal(/10,000 MAD minimum/i.test(formalities), false, 'the SARL minimum-capital error must stay corrected')
+
   const tips = body('tips')
   assert.match(tips, /ICE or IF/)
   assert.match(tips, /deduction/)
   assert.match(tips, /sequential/)
+})
+
+test('each region carries only its own sections - Morocco content never leaks into the US guide', () => {
+  const ids = (region: 'MA' | 'US') => guideFor(region).sections.map(section => section.id)
+  // The US guide is the eight US sections: a Morocco section id appearing here means a
+  // shared anchor was replaced twice when the guide was extended.
+  assert.deepEqual(ids('US'), ['rates', 'nexus', 'certificates', 'content', 'income', 'contractors', 'records', 'tips'])
+  assert.deepEqual(ids('MA'), ['rates', 'content', 'auto-entrepreneur', 'payment-deadlines', 'construction', 'records', 'e-invoicing', 'employing-staff', 'non-residents', 'audits', 'formalities', 'tips'])
+
+  const us = guideFor('US').sections.map(section => [section.title, ...section.bullets].join(' ')).join(' ')
+  for (const marker of ['CNSS', 'CGI', 'cotisation minimale', 'Article 144', 'commune', 'MAD per month', 'SARL']) {
+    assert.equal(us.includes(marker), false, `US guide must not mention ${marker}`)
+  }
+  // The US guide keeps its own content after the removal.
+  assert.match(us, /no federal sales tax/)
+  assert.match(us, /1099-NEC/)
+  assert.match(us, /mechanics-lien/)
 })
 
 test('United States content explains that sales tax is state and local, not federal', () => {
@@ -164,6 +318,27 @@ test('United States content explains that sales tax is state and local, not fede
   assert.match(body, /each state sets its own retention period/)
   assert.match(body, /three to five years/)
   assert.match(body, /usually three years/)
+
+  // Contractors and construction: the consumer rule with its reseller exceptions,
+  // retainage caps, and the W-9/1099 practice. No state list is printed.
+  const section = guideFor('US').sections.find(row => row.id === 'contractors')!
+  const contractors = [section.title, ...section.bullets].map(text).join(' ')
+  assert.match(contractors, /consumer of the materials/)
+  assert.match(contractors, /resale certificate/)
+  assert.match(contractors, /Texas/)
+  assert.match(contractors, /lump-sum or separated/)
+  assert.match(contractors, /capital improvement or repair/)
+  assert.match(contractors, /Retainage/)
+  assert.match(contractors, /5%/)
+  assert.match(contractors, /flow down to subcontractors/)
+  assert.match(contractors, /not a discount/)
+  assert.match(contractors, /W-9/)
+  assert.match(contractors, /1099-NEC/)
+  assert.match(contractors, /1099-K/)
+  assert.match(contractors, /backup withholding/)
+  assert.match(contractors, /mechanics-lien deadlines/)
+  assert.match(contractors, /preliminary notices/)
+  assert.match(contractors, /state-specific/)
 })
 
 test('the assistant region follows Settings until it is switched inside the assistant', () => {
@@ -232,7 +407,10 @@ test('the panel renders the bundled guide in every language, Arabic included', a
       createElement(TaxAssistantPanel, { region: 'US', onRegionChange: noop, onApplyRegion: noop, onHide: noop, startOpen: true }),
       createElement(ShowTaxAssistantButton, { onShow: noop }),
     ))
-    assert.ok(html.includes('2026-09-30'), language)
+    assert.ok(html.includes('2026-10-03'), language)
+    // The construction sections render too, translated, in every language.
+    assert.ok(html.includes(dictionaries[language]['Construction and public works']), language)
+    assert.ok(html.includes(dictionaries[language]['Contractors and construction']), language)
     assert.ok(html.includes(dictionaries[language]['Tax assistant']), language)
     assert.ok(html.includes(dictionaries[language]['Use this region for new invoices']), language)
     assert.ok(html.includes(dictionaries[language]['Value added tax (TVA)']), language)

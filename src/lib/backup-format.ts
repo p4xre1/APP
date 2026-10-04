@@ -76,7 +76,7 @@ export type { StoreName } from './schema'
 import { defaultPreferences, validPreferences, validCurrency, languages } from './preferences'
 import { floorsFromNumbers } from './fatorati'
 import { clampDueDays } from './status'
-import { roundMoney } from './format'
+import { roundMoney, lineTotal } from './format'
 import { DEFAULT_TAX_REGION, isTaxRegion } from './taxGuide'
 import { MAX_BACKUP_IMAGE_BYTES, IMAGE_MIME_TYPES } from './images'
 import { isAccentId, isLayoutId, isPresetId, LEGACY_TEMPLATE } from './templates'
@@ -466,7 +466,11 @@ export function normalizeRecord(name: StoreName, source: Record<string,unknown>,
     row.taxRate = Math.round(rate * 1e6) / 1e6
   }
   if(name==='invoices'||name==='estimates') {
-    row.items = (row.items as Record<string,unknown>[]).map(item=>({...item,unitPrice:roundMoney(item.unitPrice as number,currency),total:roundMoney((item.quantity as number)*roundMoney(item.unitPrice as number,currency),currency)}))
+    // The line total is the SAME rule the form and the renderer use: quantity times
+    // unit price, less the line discount. Deriving it from the raw product dropped
+    // every discount and left the printed line contradicting the document's own
+    // subtotal, so a re-import or a plain save silently rewrote discounted amounts.
+    row.items = (row.items as Record<string,unknown>[]).map(item=>({...item,unitPrice:roundMoney(item.unitPrice as number,currency),total:lineTotal(item.quantity as number,item.unitPrice as number,currency,item.discount as number|undefined)}))
   }
   if(name==='invoices'&&Array.isArray(row.payments)) {
     row.payments = (row.payments as Record<string,unknown>[]).map(payment=>({...payment,amount:roundMoney(payment.amount as number,currency)}))

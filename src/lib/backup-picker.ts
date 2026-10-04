@@ -19,11 +19,27 @@ export function chooseBackupFile(mode:ImportMode){
   document.body.appendChild(input);input.click()
 }
 
-let pickedLogo:File|null=null
-export const takePickedLogo=()=>{const file=pickedLogo;pickedLogo=null;return file}
-export const subscribePickedLogo=subscribePickedBackup
-export function chooseLogoFile(){
+/** Which business image the file dialog was opened for. */
+export type ImageTarget='logo'|'stamp'
+export interface PickedLogo{file:File;target:ImageTarget}
+
+let pickedLogo:PickedLogo|null=null
+const logoListeners=new Set<()=>void>()
+export const takePickedLogo=()=>{const result=pickedLogo;pickedLogo=null;return result}
+// Its own listener set: a logo pick must never wake the backup import listeners.
+export const subscribePickedLogo=(fn:()=>void)=>{logoListeners.add(fn);return()=>{logoListeners.delete(fn)}}
+/**
+ * The handoff of one picked image. The target travels WITH the file (the same shape
+ * the backup picker uses), so a listener never has to remember, in a closure, which
+ * button opened the dialog - the bug that silently dropped every chosen logo.
+ * Exported for the tests; `chooseLogoFile` is the only caller in the app.
+ */
+export function pickLogo(file:File|undefined,target:ImageTarget){
+  pickedLogo=file?{file,target}:null
+  logoListeners.forEach(fn=>fn())
+}
+export function chooseLogoFile(target:ImageTarget){
   const input=document.createElement('input');input.type='file';input.accept='image/png,image/jpeg';input.hidden=true
-  input.addEventListener('change',()=>{pickedLogo=input.files?.[0]||null;listeners.forEach(fn=>fn());input.remove()},{once:true})
+  input.addEventListener('change',()=>{pickLogo(input.files?.[0],target);input.remove()},{once:true})
   input.addEventListener('cancel',()=>input.remove(),{once:true});document.body.appendChild(input);input.click()
 }

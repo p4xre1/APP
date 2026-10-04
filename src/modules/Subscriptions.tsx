@@ -9,7 +9,7 @@ import { exportSubscriptionsPdf, exportSubscriptionsXlsx } from '../lib/subscrip
 import {
   amountToMinor, attentionList, isISODate, MAX_PERIOD_MONTHS, MAX_SERVICE_NAME, MAX_TEXT, minorToAmount,
   subscriptionCategories, subscriptionSummary, subscriptionView, SUBSCRIPTION_CURRENCIES, SUBSCRIPTION_CYCLES,
-  validateSubscription, type SubscriptionStatus,
+  todayISO, validateSubscription, type SubscriptionStatus,
 } from '../lib/subscriptions'
 import { reminderSettings } from '../lib/notifications'
 import { takeIntent } from '../lib/navigation-intent'
@@ -39,7 +39,7 @@ function emptyForm(defaultCurrency: SubscriptionCurrency): Form {
   return {
     serviceName: '', category: '', amount: '', currency: defaultCurrency,
     billingCycle: 'monthly', periodMonths: 1, autoRenew: true,
-    startDate: new Date().toISOString().slice(0, 10), paymentMethod: '', notes: '',
+    startDate: todayISO(), paymentMethod: '', notes: '',
   }
 }
 

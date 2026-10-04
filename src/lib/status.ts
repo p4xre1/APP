@@ -59,7 +59,7 @@ export const PAYMENT_TERM_DAYS = [0, 7, 15, 30, 45, 60] as const
 
 /** Due date implied by a term: issue date + days, in calendar days (UTC-safe). */
 export function dueDateFromTerms(issueDate: string, days: number): string {
-  const base = isISODate(issueDate) ? issueDate : new Date().toISOString().slice(0, 10)
+  const base = isISODate(issueDate) ? issueDate : todayISO()
   const clamped = Number.isInteger(days) && days >= 0 && days <= MAX_DUE_DAYS ? days : DEFAULT_DUE_DAYS
   return new Date(Date.parse(`${base}T00:00:00Z`) + clamped * 86400_000).toISOString().slice(0, 10)
 }

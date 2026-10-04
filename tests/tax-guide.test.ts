@@ -118,13 +118,17 @@ test('Morocco content covers the rates, Art. 145 content, auto-entrepreneur and 
   assert.match(records, /keep your backups/)
 
   // E-invoicing must not present a timeline as fact: principle only, then the DGI.
-  // Announced rollout is separated from binding law (decree unpublished at review).
+  // The legal foundation is Article 145-IX; the universal date, threshold and penalty
+  // are labelled NOT VERIFIED and the announced rollout is separated from binding law.
   const eInvoicing = body('e-invoicing')
-  assert.match(eInvoicing, /145-IX/)
+  assert.match(eInvoicing, /Article 145-IX of the CGI/)
+  assert.match(eInvoicing, /NOT VERIFIED/)
+  assert.match(eInvoicing, /Government Secretariat, SGG/)
   assert.match(eInvoicing, /DGI/)
   assert.match(eInvoicing, /structured data/)
   assert.match(eInvoicing, /announced/)
   assert.match(eInvoicing, /unpublished/)
+  assert.equal(/Article 119/.test(eInvoicing), false, 'the unverified Article 119 citation must stay out')
   assert.equal(/\b(?:19|20)\d{2}\b/.test(eInvoicing), false, 'the e-invoicing note must not state a year')
   assert.equal(/\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d/i.test(eInvoicing), false, 'no dated start')
   assert.match(eInvoicing, /no date/)
@@ -151,9 +155,15 @@ test('Morocco content covers the rates, Art. 145 content, auto-entrepreneur and 
   assert.match(construction, /subcontractor must be declared/)
   assert.match(construction, /paid directly by the administration/)
 
-  // Auto-entrepreneurs and CPU taxpayers are outside Article 145-IX.
-  assert.match(eInvoicing, /145-XI/)
+  // Auto-entrepreneurs and CPU taxpayers are reported to be outside the requirement,
+  // and the usually cited 145-X/145-XI exclusion is still flagged for the CGI text.
+  assert.match(eInvoicing, /145-X\/145-XI/)
   assert.match(eInvoicing, /Contribution Professionnelle Unique/)
+  assert.match(eInvoicing, /needs checking in the CGI text/)
+  // 145-I (electronic accounting) and 145-III (invoice content) must not be confused
+  // with the computerized-invoicing framework.
+  assert.match(eInvoicing, /145-I \(electronic accounting\)/)
+  assert.match(eInvoicing, /145-III \(ordinary invoice content\)/)
 
   // Payroll: the CNSS shares with the cap caveat, the 2026 minimum wages, the
   // compulsory work-accident insurance and the Labour Code pointer.

@@ -14,8 +14,13 @@ is recorded with its source in REVIEW-NEEDED.md.
   exceptions (separated contracts, capital improvement vs repair), retainage caps
   and flow-down, the same "retention is a receivable" rule, and W-9/1099-NEC
   practice (2,000 USD, corporate exemption, 1099-K for card payments).
-- Tax guide, e-invoicing: auto-entrepreneurs and CPU taxpayers are outside
-  Art. 145-IX (Art. 145-XI); only the email-address duty applies to them.
+- Tax guide, e-invoicing: the section now names **Article 145-IX** as the legal
+  foundation (computerized invoicing, modalities by regulatory text), separates it
+  from Articles 145-I and 145-III, and labels the **universal effective date,
+  turnover threshold and penalty as NOT VERIFIED** - the draft implementing decree
+  had reached the SGG, no date binds anyone, so the app states none. The
+  auto-entrepreneur/CPU exclusion is shipped as *reported*, with its usual citation
+  (Article 145-X/145-XI) flagged for the CGI text.
 - Reports: a US-only **Contractor payments (1099-NEC check)** card backed by
   `src/lib/contractor-payments.ts` — it groups the year's recorded Expenses per
   vendor, flags 2,000 USD or more, and states plainly that it counts what was

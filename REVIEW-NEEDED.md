@@ -7,6 +7,11 @@ native reviewer should approve. **The app ships these as information, never as
 advice**, and the tax guide keeps its "general information, not tax advice"
 disclaimer and its "Last reviewed" date.
 
+Status labels used below: **VERIFIED** (two or more independent current sources or
+the official text) → **CONDITIONAL** (shipped with an explicit caveat) →
+**REVIEW-NEEDED** (a human must check the official text) → **REJECTED / OUTDATED**
+(contradicted by current sources; never shipped).
+
 ## Tax guide figures (Morocco)
 
 | Item | Value shipped | Verify against |
@@ -113,7 +118,7 @@ VERIFIED value ships instead. Everything below is what actually went into the gu
 
 | File said | Verified value shipped | Why |
 |---|---|---|
-| E-invoicing = "CGI Art. 119 (LF 2026)" | Still Article 145-IX, with the 145-X/145-XI exclusions | Two independent 2026 sources (and the pre-existing audit) place the requirement in Art. 145-IX; Art. 119 is not corroborated. **Reconcile against the CGI text before release.** |
+| E-invoicing = "CGI Art. 119 (LF 2026)" | **REJECTED.** The legal foundation is **Article 145-IX** (computerized invoicing system; practical modalities left to a regulatory text). Articles 145-I (electronic accounting) and 145-III (ordinary invoice content) are different rules. | Checked by the owner against the 2026 consolidated CGI (DGI edition incorporating LF 50-25): Article 145 carries the accounting/invoicing obligations and 145-IX is the computerized-invoicing framework; Art. 119 is not corroborated. |
 | Annual leave "24 days/yr" | 1.5 working days per month worked = **18 days/yr** (Labour Code Art. 231), 24 being the under-18 rate or a seniority case | Four 2026 HR sources agree on 1.5 days/month; 24 days is not the general rule. Shipped with the Code reference and no seniority table. |
 | Interest "1%/month (Art. 230)", penalties "0.5%-2%/month" | Declaration majorations **5% (<=30 days) / 15% / 20%**, late payment **penalty + 5% first month + 0.5%/month (Art. 208)** | TGR's own taxpayer guide and CGI commentary give 0.5%/month as the monthly component; the 1%/month figure is not corroborated. |
 | Non-resident withholding "15% services/leases, 7.5% dividends, 10% royalties" | **10%** on service fees, royalties and interest; dividends on the progressive schedule (**11.25% for 2026 distributions, 10% from 2027**) | 2026 sources (including the LF 2024-2026 dividend schedule) contradict the 15% and 7.5% rates. |
@@ -173,7 +178,7 @@ are what the app ships. Sources are named per row.
 | "Casablanca Finance City flat 17.5%" | **20%** (like industrial acceleration zones) | 2026 sources give 20% for CFC after the rate convergence. |
 | "Resident individuals pay 15% WHT on dividends" | Unchanged: dividends follow the 2026 schedule 11.25% → 10% in 2027 (the shipped bullet is in the non-resident section, where the rate is documented) | The 15% figure is the pre-2023 rate; keep the schedule documented in the non-resident section. |
 | Payroll example "CNSS 674 / 2,109 for 10,000 MAD gross" | Not used | Both ignore the 6,000 MAD cap and the branch split (employee is 494.80 and employer 1,790.80 in the 2026 tables). |
-| E-invoicing "CGI Art. 119 / Law 59-20" | Unchanged: **Article 145-IX** with the 145-X/145-XI exclusions | Consistent with both earlier research files' own statements and the 2026 sources. "Law 59-20" could not be verified. |
+| E-invoicing "CGI Art. 119 / Law 59-20" | **REJECTED**: foundation is **Article 145-IX**; the auto-entrepreneur/CPU exclusion is shipped as *reported* and its usual citation (Article 145-X/145-XI) is explicitly flagged for the CGI text; "Law 59-20" could not be verified. | Owner's check against the 2026 CGI plus the 2026 DGI sources. |
 
 **Not adopted from the file**
 
@@ -230,6 +235,24 @@ shipped.
 | "There is no VAT registration threshold (0) - all businesses are subject" | Unverified against the franchise regime the guide already describes; nothing shipped, the franchise caution stands. |
 | IUC vehicle tax, a construction "SMAG licence", Art. 103-104 holding-company exemption, Art. 81 group integration, free-zone 0% to 8.75% under Law 8-95, lease-back, PPP Law 17-08, AML declaration at 100,000 MAD | Unverified single-file claims, several outside an offline invoicing tool's scope; nothing shipped. |
 | Its JSON schema, ER/Gantt diagrams and integration plan | Same reasoning as the previous two files: the app is an offline single-business invoicing tool, not a payroll/tax engine. The payroll, transfer-pricing, customs and criminal chapters are out of scope. |
+
+### E-invoicing — citation resolved, scope kept open (2026-10-04)
+
+The owner checked this against the 2026 consolidated CGI, which settles two things and
+leaves three open:
+
+| Item | Status |
+|---|---|
+| Article 119 as the e-invoicing citation in file 1 | **REJECTED / OUTDATED** - never shipped; the guide never cited it. |
+| Legal foundation of the computerized-invoicing obligation | **VERIFIED: Article 145-IX** (technical criteria set by the administration; modalities by regulatory text). |
+| Article 145-XI as the citation for the *general* obligation | **REVIEW-NEEDED** - the sub-paragraph is used in the guide only for the auto-entrepreneur/CPU exclusion, and that exclusion is now shipped as "reported ... still needs checking in the CGI text". |
+| Articles 145-I (electronic accounting) and 145-III (ordinary invoice content) | **VERIFIED as distinct rules** - the guide now says so explicitly so they are not misread as the mandate. |
+| Universal effective date, turnover threshold, penalty for not using e-invoicing | **NOT VERIFIED** - deployment was announced, the draft implementing decree had reached the SGG, no date/threshold/penalty is established. The guide states no date and hard-codes nothing; **do not add a dated "mandatory from X" claim** until the decree is published in the Official Gazette. |
+
+Sources: Ministère des Finances / DGI, *Code général des impôts 2026* (consolidated,
+incorporating Finance Law 50-25); SGG Bulletin Officiel / legal-text database as the
+authority of record for the published decree; Médias24 (2026-04-18) interview with the
+DGI director on the intended 2026 deployment and the draft decree at the SGG.
 
 ## Arabic / French terminology to approve (native reviewer)
 

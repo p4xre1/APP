@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { defaultPreferences, accentText, validPreferences, supportedValues } from '../src/lib/preferences'
+import { defaultPreferences, accentText, validPreferences, supportedValues, migratePreferences } from '../src/lib/preferences'
 import { minorUnits, roundMoney, sumMoney, formatDate, inputToUTC } from '../src/lib/format'
 import { reportTotals } from '../src/lib/reports'
 import { fixture } from './fixtures'
@@ -44,4 +44,13 @@ test('accent text automatically chooses the higher-contrast black/white; prefere
   assert.equal(accentText('#ffff00'),'#000000');assert.equal(accentText('#2563eb'),'#ffffff')
   assert.equal(validPreferences(defaultPreferences),true)
   for(const patch of [{accent:'javascript:x'},{timeZone:'wrong/zone'},{autoLock:100},{digits:'no'},{defaultCurrency:'BAD'}])assert.equal(validPreferences({...defaultPreferences,...patch}),false)
+})
+test('older saved preferences discard retired menu styles and preserve supported choices',()=>{
+  const legacy={...defaultPreferences,theme:'dark' as const,accent:'#7c3aed',sidebarColor:'#fefefe',brandFont:'sora'}
+  const migrated=migratePreferences(legacy)
+  assert.ok(migrated)
+  assert.equal(migrated.theme,'dark')
+  assert.equal(migrated.accent,'#7c3aed')
+  assert.equal('sidebarColor' in migrated,false)
+  assert.equal('brandFont' in migrated,false)
 })

@@ -6,6 +6,7 @@ import type { FatoratiBackup } from './db'
 import { shareFile } from './share-file'
 import { todayISO } from './subscriptions'
 import { paymentsTotal, invoiceBalance } from './payments'
+import { customerInsights } from './customer-insights'
 
 export type CsvStore = 'customers' | 'invoices' | 'expenses'
 
@@ -21,13 +22,23 @@ export function buildCsv(rows: unknown[][]): string {
 
 export function csvRows(store: CsvStore, backup: FatoratiBackup): unknown[][] {
   const currency = backup.preferences.defaultCurrency
-  if (store === 'customers') return [
-    // No Balance column: the stored balance was never maintained by anything, so
-    // exporting it would publish a stale figure. What a customer owes is computed
-    // from their open invoices (customerOutstanding) wherever it is displayed.
-    ['ID', 'Name', 'Email', 'Phone', 'Address', 'City', 'Notes', 'Kind', 'Created At', 'Updated At'],
-    ...backup.customers.map(c => [c.id, c.name, c.email, c.phone, c.address, c.city, c.notes, c.kind || 'business', new Date(c.createdAt).toISOString(), new Date(c.updatedAt).toISOString()]),
-  ]
+  if (store === 'customers') {
+    const insights = customerInsights(backup.customers, backup.invoices, currency)
+    return [
+      // These are computed from invoice history, never the stale legacy balance field.
+      // Amount arrays stay grouped by currency so a CSV never adds MAD, USD and EUR together.
+      ['ID', 'Name', 'Email', 'Phone', 'Address', 'Country', 'Country name', 'State', 'City', 'Notes', 'Kind', 'Total invoiced', 'Amount paid', 'Unpaid balance', 'Rank', 'Rank amount', 'Rank currency', 'Created At', 'Updated At'],
+      ...backup.customers.map(c => {
+        const insight = insights.get(c.id)!
+        return [
+          c.id, c.name, c.email, c.phone, c.address, c.country || '', c.countryName || '', c.state || '', c.city, c.notes,
+          c.kind || 'business', JSON.stringify(insight.invoiced), JSON.stringify(insight.received), JSON.stringify(insight.outstanding),
+          insight.rank ?? '', insight.rank === null ? '' : insight.rankValue, insight.rank === null ? '' : currency,
+          new Date(c.createdAt).toISOString(), new Date(c.updatedAt).toISOString(),
+        ]
+      }),
+    ]
+  }
   if (store === 'expenses') return [
     ['ID', 'Description', 'Amount', 'Tax Amount', 'Currency', 'Category', 'Date', 'Date and time', 'Vendor', 'Payment Method', 'Reference', 'Created At', 'Updated At'],
     ...backup.expenses.map(e => [e.id, e.description, e.amount, e.taxAmount ?? 0, e.currency||currency, e.category, e.date, new Date(e.occurredAt||e.createdAt).toISOString(), e.vendor, e.paymentMethod || '', e.reference || '', new Date(e.createdAt).toISOString(), new Date(e.updatedAt).toISOString()]),

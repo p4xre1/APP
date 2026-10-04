@@ -206,7 +206,13 @@ export function validateBackup(value: unknown): asserts value is FatoratiBackup 
         if (record.exchangeRate !== undefined && (!finite(record.exchangeRate) || record.exchangeRate <= 0 || !validCurrency(record.rateCurrency))) throw invalid()
         if (record.pdfColor !== undefined && typeof record.pdfColor !== 'boolean') throw invalid()
       }
-      if (name === 'customers' && record.kind !== undefined && record.kind !== 'business' && record.kind !== 'individual') throw invalid()
+      if (name === 'customers') {
+        if (record.kind !== undefined && record.kind !== 'business' && record.kind !== 'individual') throw invalid()
+        if (record.country !== undefined && record.country !== 'MA' && record.country !== 'US' && record.country !== 'other') throw invalid()
+        for (const key of ['countryName', 'state']) {
+          if (record[key] !== undefined && (typeof record[key] !== 'string' || (record[key] as string).length > MAX_ITEM_TEXT_LENGTH)) throw invalid()
+        }
+      }
       if (name === 'businesses') {
         for (const key of ['ifNumber', 'tpNumber', 'rcNumber', 'cnieNumber']) {
           if (record[key] !== undefined && (typeof record[key] !== 'string' || record[key].length > 64)) throw invalid()

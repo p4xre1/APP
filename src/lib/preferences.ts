@@ -49,6 +49,17 @@ export function validPreferences(value: unknown): value is DisplayPreferences {
     && typeof p.secureScreen === 'boolean' && typeof p.pdfColor === 'boolean'
     && Number.isFinite(p.updatedAt) && p.updatedAt >= 0
 }
+
+/** Migrates saved display settings while discarding retired sidebar customization fields. */
+export function migratePreferences(value: unknown): DisplayPreferences | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const saved = { ...(value as Record<string, unknown>) }
+  delete saved.sidebarColor
+  delete saved.brandFont
+  const candidate: DisplayPreferences = { ...defaultPreferences, ...saved } as DisplayPreferences
+  return validPreferences(candidate) ? candidate : null
+}
+
 let current: DisplayPreferences = { ...defaultPreferences }
 const listeners = new Set<() => void>()
 export const getPreferences = () => current
@@ -59,6 +70,7 @@ export function accentText(hex: string): '#000000' | '#ffffff' {
   const l = rgb[0]*.2126 + rgb[1]*.7152 + rgb[2]*.0722
   return (l+.05)/.05 >= 1.05/(l+.05) ? '#000000' : '#ffffff'
 }
+
 export function applyAppearance() {
   if (typeof document === 'undefined') return
   const root = document.documentElement
@@ -89,7 +101,7 @@ function publish(p: DisplayPreferences) {
 }
 export async function loadPreferences() {
   const { value } = await Preferences.get({ key: PREFERENCE_KEY })
-  if (value) { const parsed: unknown = JSON.parse(value); if (validPreferences(parsed)) current = parsed }
+  if (value) { const parsed: unknown = JSON.parse(value); const migrated = migratePreferences(parsed); if (migrated) current = migrated }
   publish(current)
   if (typeof matchMedia !== 'undefined') matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyAppearance)
   if (Capacitor.isNativePlatform()) await ScreenSecurity.setSecure({ enabled: current.secureScreen })

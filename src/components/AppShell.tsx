@@ -43,18 +43,18 @@ export default function AppShell({active,onNavigate,businessName,children}:{acti
     const filtered=navigation.filter(item=>t(item.label).toLocaleLowerCase(prefs.language).includes(search.toLocaleLowerCase(prefs.language)))
     return <>
       <div className="flex h-16 shrink-0 items-center justify-between px-4">
-        {small ? <span className="mx-auto grid h-8 w-8 place-items-center rounded-[9px] bg-brand text-[16px] font-extrabold">{t('Fatorati').charAt(0)}</span> : <span className="inline-flex items-center gap-2.5 select-none"><span className="grid h-8 w-8 place-items-center rounded-[9px] bg-brand shadow-sm"><ReceiptText className="h-[18px] w-[18px]" strokeWidth={2.4}/></span><span className="text-[18px] font-extrabold tracking-tight leading-none text-white">{t('Fatorati')}</span></span>}
-        <button aria-label={t(mobile?'Close navigation':small?'Expand sidebar':'Collapse sidebar')} onClick={()=>mobile?drawer.current?.close():setCollapsed(!collapsed)} className="rounded-lg p-1.5 text-sidebar-faint hover:bg-sidebar-hover hover:text-white">
+        {small ? <span className="brand-font mx-auto grid h-8 w-8 place-items-center rounded-[9px] bg-brand text-[16px] font-extrabold">{t('Fatorati').charAt(0)}</span> : <span className="inline-flex items-center gap-2.5 select-none"><span className="grid h-8 w-8 place-items-center rounded-[9px] bg-brand shadow-sm"><ReceiptText className="h-[18px] w-[18px]" strokeWidth={2.4}/></span><span className="brand-wordmark text-[20px] font-extrabold leading-none">{t('Fatorati')}</span></span>}
+        <button aria-label={t(mobile?'Close navigation':small?'Expand sidebar':'Collapse sidebar')} onClick={()=>mobile?drawer.current?.close():setCollapsed(!collapsed)} className="rounded-lg p-1.5 text-sidebar-faint hover:bg-sidebar-hover hover:text-sidebar-ink">
           {mobile?<X className="h-4 w-4"/>:small?<PanelLeftOpen className="h-4 w-4 directional"/>:<PanelLeftClose className="h-4 w-4 directional"/>}
         </button>
       </div>
-      {!small&&<div className="px-3 pb-2"><div className="relative"><Search className="pointer-events-none absolute start-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-sidebar-faint"/><input aria-label={t('Search modules')} value={search} onChange={e=>setSearch(e.target.value)} placeholder={t('Search modules')} className="w-full rounded-lg bg-sidebar-hover py-2 ps-9 pe-3 text-[12.5px] text-white outline-none placeholder:text-sidebar-faint focus:ring-1 focus:ring-brand"/></div></div>}
+      {!small&&<div className="px-3 pb-2"><div className="relative"><Search className="pointer-events-none absolute start-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-sidebar-faint"/><input aria-label={t('Search modules')} value={search} onChange={e=>setSearch(e.target.value)} placeholder={t('Search modules')} className="w-full rounded-lg bg-sidebar-hover py-2 ps-9 pe-3 text-[12.5px] text-sidebar-ink outline-none placeholder:text-sidebar-faint focus:ring-1 focus:ring-brand"/></div></div>}
       <nav aria-label={t('Navigation')} className="flex-1 overflow-y-auto px-3 pb-4">
         {['Overview','Business','Finance','Workspace'].map(group=>{
           const items=filtered.filter(item=>item.group===group)
           return items.length>0&&<div key={group} className="mt-4 first:mt-1">
             {!small&&<p className="px-2 pb-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-sidebar-faint">{t(group)}</p>}
-            <div className="space-y-0.5">{items.map(item=><button key={item.key} aria-label={t(item.label)} aria-current={active===item.key?'page':undefined} title={small?t(item.label):undefined} onClick={()=>navigate(item.key)} className={`flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors ${active===item.key?'bg-sidebar-active shadow-sm':'text-sidebar-ink hover:bg-sidebar-hover hover:text-white'} ${small?'justify-center':''}`}><item.icon className="h-[18px] w-[18px] shrink-0" strokeWidth={active===item.key?2.4:2}/>{!small&&<span className="truncate">{t(item.label)}</span>}</button>)}</div>
+            <div className="space-y-0.5">{items.map(item=><button key={item.key} aria-label={t(item.label)} aria-current={active===item.key?'page':undefined} title={small?t(item.label):undefined} onClick={()=>navigate(item.key)} className={`flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors ${active===item.key?'bg-sidebar-active shadow-sm':'text-sidebar-ink hover:bg-sidebar-hover hover:text-sidebar-ink'} ${small?'justify-center':''}`}><item.icon className="h-[18px] w-[18px] shrink-0" strokeWidth={active===item.key?2.4:2}/>{!small&&<span className="truncate">{t(item.label)}</span>}</button>)}</div>
           </div>
         })}
       </nav>
@@ -62,7 +62,7 @@ export default function AppShell({active,onNavigate,businessName,children}:{acti
     </>
   }
   return <div className="flex min-h-screen bg-canvas">
-    <aside className={`dark-scroll sticky top-0 hidden h-screen shrink-0 flex-col bg-sidebar text-sidebar-ink transition-all duration-200 lg:flex ${collapsed?'w-[68px]':'w-64'}`}>{sidebar()}</aside>
+    <aside className={`dark-scroll sticky top-0 z-40 hidden h-screen shrink-0 flex-col bg-sidebar text-sidebar-ink transition-all duration-200 lg:flex ${collapsed?'w-[68px]':'w-64'}`}>{sidebar()}</aside>
     <dialog ref={drawer} aria-label={t('Navigation')} onClick={e=>{if(e.target===drawer.current)drawer.current.close()}} className="fixed inset-y-0 start-0 end-auto m-0 h-dvh max-h-none w-64 max-w-none border-0 bg-sidebar p-0 text-sidebar-ink backdrop:bg-navy/50 lg:hidden"><div className="dark-scroll flex h-full flex-col">{sidebar(true)}</div></dialog>
     <div className="flex min-w-0 flex-1 flex-col">
       <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-line bg-canvas/85 px-4 backdrop-blur-md sm:px-6 no-print">

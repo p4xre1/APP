@@ -128,6 +128,12 @@ export interface Customer {
    * this field existed have no value and are treated as 'business'.
    */
   kind?: 'business' | 'individual'
+  /** Optional location category used to filter Moroccan cities and US states. */
+  country?: 'MA' | 'US' | 'other'
+  /** Optional free-form country name when `country` is 'other'. */
+  countryName?: string
+  /** USPS state abbreviation for US customers, e.g. CA or NY. */
+  state?: string
   taxNumber?: string
   id: string
   name: string

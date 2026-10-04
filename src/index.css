@@ -30,11 +30,11 @@
   --color-emerald-700: #047857;
 
   /* Sidebar (dark) */
-  --color-sidebar: #0f172a;
-  --color-sidebar-hover: #1e293b;
+  --color-sidebar: #263238;
+  --color-sidebar-hover: #37474f;
   --color-sidebar-active: #2563eb;
-  --color-sidebar-ink: #cbd5e1;
-  --color-sidebar-faint: #94a3b8;
+  --color-sidebar-ink: #eceff1;
+  --color-sidebar-faint: #b0bec5;
 
   /* Status */
   --color-good: #10b981;
@@ -149,7 +149,65 @@ body {
 .mz-view {
   animation: mz-slide 0.22s ease-out;
 }
+.brand-font,
+.brand-wordmark { font-family: 'JetBrains Mono', 'Tajawal', monospace; }
+.brand-wordmark {
+  position: relative;
+  display: inline-block;
+  color: var(--color-sidebar-ink);
+  letter-spacing: 0.015em;
+  text-shadow: 0 1px 14px color-mix(in srgb, var(--color-sidebar-ink) 20%, transparent);
+}
+.brand-wordmark::after {
+  position: absolute;
+  inset-inline: 0 24%;
+  bottom: -5px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent, var(--color-brand)), transparent);
+  content: '';
+}
 
+@keyframes customer-map-region-reveal {
+  from { opacity: 0; transform: translateY(5px) scale(0.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes customer-map-marker-pulse {
+  0% { opacity: 0.42; transform: scale(0.8); }
+  75% { opacity: 0.08; transform: scale(1.65); }
+  100% { opacity: 0; transform: scale(1.85); }
+}
+.customer-map-fill { transition: fill 240ms ease; }
+.customer-map-region {
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0;
+  animation: customer-map-region-reveal 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.customer-map-marker {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 160ms ease-out;
+}
+.customer-map-marker:hover,
+.customer-map-marker:focus-visible { transform: scale(1.08); }
+.customer-map-marker-halo {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 180ms ease-out, opacity 180ms ease-out;
+}
+.customer-map-marker:hover .customer-map-marker-halo,
+.customer-map-marker:focus-visible .customer-map-marker-halo { opacity: 0.42; transform: scale(1.28); }
+.customer-map-marker-selected .customer-map-marker-halo {
+  animation: customer-map-marker-pulse 1.55s ease-out infinite;
+}
+.customer-map-panel { animation: mz-pop 220ms ease-out both; }
+.customer-map-location-chip { transition: transform 150ms ease-out, border-color 150ms ease-out, background-color 150ms ease-out; }
+.customer-map-location-chip:hover,
+.customer-map-location-chip:focus-visible { transform: translateY(-2px); }
+.customer-map-state { transition: transform 150ms ease-out, box-shadow 150ms ease-out, background-color 150ms ease-out, border-color 150ms ease-out, color 150ms ease-out; }
+.customer-map-state:hover,
+.customer-map-state:focus-visible { transform: translateY(-1px); box-shadow: 0 3px 8px rgb(15 23 42 / 10%); }
 
 /* Touch targets: Android's 48 dp minimum and WCAG 2.5.8. These rules are
    intentionally outside @layer so they win over any smaller utility class
@@ -204,5 +262,10 @@ input[type='radio'] {
 :root[data-spacing="compact"] { --spacing:0.2rem; }
 [dir="rtl"] .directional { transform:scaleX(-1); }
 [dir="rtl"] .uppercase { letter-spacing:normal; }
-@media (prefers-reduced-motion:reduce) { .mz-view { animation:none; } }
+@media (prefers-reduced-motion:reduce) {
+  .mz-view, .customer-map-region, .customer-map-panel,
+  .customer-map-marker-selected .customer-map-marker-halo { animation:none; }
+  .customer-map-region { opacity:1; transform:none; }
+  .customer-map-fill, .customer-map-marker, .customer-map-marker-halo, .customer-map-location-chip, .customer-map-state { transition:none; }
+}
 @media print { .no-print { display:none !important; } }

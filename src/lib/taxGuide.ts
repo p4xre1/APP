@@ -12,7 +12,7 @@
 
 import type { Settings, TaxRegion } from '../store/types'
 
-export const TAX_GUIDE_LAST_REVIEWED = '2026-09-30'
+export const TAX_GUIDE_LAST_REVIEWED = '2026-10-03'
 export const DEFAULT_TAX_REGION: TaxRegion = 'MA'
 export const TAX_REGIONS: TaxRegion[] = ['MA', 'US']
 
@@ -50,7 +50,9 @@ export const TAX_GUIDE: Record<TaxRegion, TaxGuide> = {
         id: 'rates',
         title: 'Value added tax (TVA)',
         bullets: [
-          'Standard rate 20%; reduced rate 10% only for the operations the CGI lists - the rate follows the nature of the operation, it is never a free choice.',
+          'Standard rate 20%; reduced rate 10% only for the operations the CGI lists (Article 99 CGI) - the rate follows the nature of the operation, it is never a free choice.',
+          'The reform left a few transitional exceptions that a decree lists (energy and transport among them): check the text that applies to your operation before using any rate other than 20% or 10%.',
+          'Charging TVA at all depends on your turnover and activity: below the thresholds the CGI provides a franchise (you charge no TVA and deduct none), and the thresholds differ between sales and services. Confirm your regime with your accountant before invoicing without TVA - the app prints the rate you set, it never decides it.',
           'An exemption or an out-of-scope status is a legal situation, not a 0% rate you pick: enter 0% here and state the legal reason on the invoice.',
           'Exports are exempt with the right to deduct (Art. 92 CGI): no TVA on the invoice, with the exemption mention.',
           'The 7% and 14% rates were removed on 1 January 2026; the applicable rate follows the date the operation is carried out.',
@@ -91,6 +93,18 @@ export const TAX_GUIDE: Record<TaxRegion, TaxGuide> = {
         ],
       },
       {
+        id: 'construction',
+        title: 'Construction and public works',
+        bullets: [
+          'Building and civil-works contracts are services taxed at the standard TVA rate of 20%. Since 1 January 2026 Morocco applies only two rates, 20% and 10%: the former 7% and 14% rates are gone, and the reduced rate covers the operations the CGI lists, not ordinary site work.',
+          'Conventional social housing is exempt from TVA under Article 92-I-28° CGI within the price and surface caps of the current Finance Law: confirm the project qualifies before you bill a client without tax.',
+          'On a public contract a retenue de garantie is withheld: one tenth (10%) of each interim payment, stopping at 7% of the initial contract amount plus any amendments. It can be replaced by a personal and solidary surety, and it is released by mainlevée after the réception définitive, which can come months after the work ends.',
+          'Public contracts must be paid within 60 days of the constatation du service fait (45 days to order the payment, 15 days to settle it - Decree 2-16-344 of 22 July 2016). Past that, intérêts moratoires are due, and an unreleased retenue de garantie carries them too.',
+          'A retenue de garantie is not a discount: the work has been done, so the full price stays revenue and the withheld part is a receivable. Bill the full amount and record the release as a later payment instead of lowering the invoice.',
+          'Subcontracting on a public contract: the subcontractor must be declared by the contractor and accepted by the contracting authority, and only a share of the contract may be subcontracted under the procurement decree; an accepted subcontractor can be paid directly by the administration. Keep the acceptance and the agreed payment terms with the contract file.',
+        ],
+      },
+      {
         id: 'records',
         title: 'Record keeping',
         bullets: [
@@ -108,7 +122,56 @@ export const TAX_GUIDE: Record<TaxRegion, TaxGuide> = {
           'A progressive rollout starting with the largest businesses has been announced, but at the last review the implementing decree was still unpublished: no date, threshold or format binds anyone yet, so this app states no date.',
           'Check the DGI website for the current status.',
           'If electronic submission or prior validation becomes mandatory for your category, an offline PDF alone may not satisfy it: check the requirement before relying on this app for it.',
+          'Auto-entrepreneurs and taxpayers under the Contribution Professionnelle Unique (CPU) are outside Article 145-IX - Article 145-XI says so - and only the requirement to hold an email address (Article 145-X) applies to them.',
           'Fatorati stores invoices as structured data to prepare for it.',
+        ],
+      },
+      {
+        id: 'employing-staff',
+        title: 'Employing staff',
+        bullets: [
+          'Social contributions (2026): the employer pays 21.09% of gross payroll - family allowances 6.40%, short-term benefits 1.05%, long-term benefits 7.93%, AMO 4.11% and the vocational training tax 1.60% - and the employee contributes 6.74% (0.52% + 3.96% social, 2.26% AMO).',
+          'The 6,000 MAD monthly cap applies only to the short-term and long-term social benefits: AMO, family allowances and the training tax are computed on the whole salary.',
+          'Minimum wage: 17.92 MAD per hour in industry, commerce and the professions from 1 January 2026 (SMIG), and 97.44 MAD per working day in agriculture from 1 April 2026 (SMAG) - Decree 2.25.983.',
+          'Family allowances paid by the CNSS to an employee with children: 300 MAD per month for each of the first three children and 36 MAD per child for the next three (six children maximum). The employer 6.40% contribution funds them, and the tax deduction of 600 MAD per dependant is a separate thing.',
+          'Work-accident insurance is compulsory (Law 18-12). The premium is set by the insurer from the activity and the payroll, never by a legal rate.',
+          'Income tax on salaries: the professional abatement is 35% of annual gross pay up to 78,000 MAD and 25% above it, capped at 35,000 MAD a year, and the deduction for dependants is 600 MAD per dependent per year (up to 6 dependants). Net taxable income under 40,000 MAD a year pays no tax; the scale runs to 37%: check the Finance Law in force.',
+          'Paid leave, notice and any dismissal indemnity follow the Labour Code (Law 65-99): leave accrues at 1.5 working days per month worked (18 days a year) with seniority increases, and an exit must follow the Code procedure - check it or ask your accountant before terminating.',
+        ],
+      },
+      {
+        id: 'non-residents',
+        title: 'Paying a non-resident',
+        bullets: [
+          'Payments a Moroccan business makes to a person or company established abroad in the categories listed by Article 15 of the CGI - service fees, royalties, interest, gross rents, dividends among them - are subject to withholding at source by the payer.',
+          'The domestic rate is 10% of the gross amount for service fees, royalties and interest; dividends follow the progressive schedule (11.25% for 2026 distributions, 10% from 2027). The withholding is computed on the gross amount, with no deduction of costs.',
+          'A tax treaty may reduce or exempt the withholding: check the treaty with the payee country and keep the certificate of tax residence it requires in the file.',
+          'Not withholding exposes YOU to the tax and the penalties, not the foreign supplier: withhold first, then pay the balance.',
+        ],
+      },
+      {
+        id: 'audits',
+        title: 'Audits, late filing and appeals',
+        bullets: [
+          'The administration can reassess or audit a year within four years (Article 226 CGI), extended to ten years in case of fraud (Article 228).',
+          'A declaration filed late is fined 5% of the tax up to 30 days of delay, 15% beyond, and 20% when the administration assesses for a missing or insufficient declaration; a late payment adds a penalty and a 5% increase for the first month plus 0.5% per further month (Article 208 CGI).',
+          'VAT is declared and paid by the 20th of the month after the period: monthly once turnover passes 1,000,000 MAD, quarterly below it. The app files nothing - keep the deadline in your own calendar.',
+          'A disagreement goes to the tax tribunal after the administration has ruled on the claim: keep the dated correspondence and the documents that support each figure.',
+        ],
+      },
+      {
+        id: 'formalities',
+        title: 'Company taxes and formalities',
+        bullets: [
+          'Company income tax (2026): the rate is 20% of net taxable profit below 100 million MAD and 35% at or above it (40% for banks and insurers, 20% for Casablanca Finance City and industrial acceleration zones). It is proportional, not progressive: crossing the threshold moves the whole profit to the higher rate. The app never computes income tax - it is not part of your invoices.',
+          'Company income tax deadlines (calendar-year company): the annual return and the balance are due within three months of the year end (31 March), and four advance payments of 25% each fall due on 31 March, 30 June, 30 September and 31 December (Articles 20 and 169 CGI). The app keeps no filing calendar - put these dates in your own.',
+          'An expense not settled by crossed cheque, bank transfer, bill of exchange or electronic means is deductible only up to 5,000 MAD per day and per supplier, within 50,000 MAD per month and per supplier (Article 11-II CGI); the excess is added back and carries a 6% fine, so pay larger amounts by a traceable method.',
+          'The cotisation minimale is computed on the year turnover EXCLUDING tax (HT) - TVA never enters its base (Article 144 CGI) - at 0.25% (0.15% in regulated sectors), with a floor of 3,000 MAD even in a loss year; new companies are exempt for their first 36 months.',
+          'Registering a company or raising its capital attracts registration duties - commonly cited as 1% of the amount with a 1,000 MAD minimum, while Finance Laws have introduced exemptions for company-creation acts: the notary applies the rule in force, so confirm the amount before budgeting.',
+          'Since 1 July 2026 a business withholds 5% at source on rent paid to a professional lessor (a non-final withholding credited against that lessor\'s tax): check whether your lease is in scope and keep the payment proof.',
+          'A solidarity contribution on profits (CSS) applies on top of company income tax when net taxable profit reaches 1,000,000 MAD: the rate rises by band from 1.5% to 5% (1.5% up to 5 million, 2.5% up to 10 million, 3.5% up to 40 million, 5% above) and is not deductible; the 2026 Finance Law extended it through 2028. Confirm the band that applies to your profit.',
+          'Company law minimums: a SARL has no legal minimum capital - the partners set it in the statutes (a common practice is 10,000 MAD) - while a public company (SA) needs at least 300,000 MAD (3,000,000 if it offers shares to the public). Check the Code des sociétés for the form you choose.',
+          'Local taxes - taxe professionnelle and taxe des services communaux - have no single national rate: they depend on the commune, the premises and the activity (Law 47-06), so ask the commune or your accountant for your case.',
         ],
       },
       {
@@ -171,6 +234,18 @@ export const TAX_GUIDE: Record<TaxRegion, TaxGuide> = {
           'Other 1099 categories keep their own thresholds (royalties and payments to attorneys among them): check the current IRS instructions for each form.',
           'Payment platforms report on Form 1099-K above 20,000 USD and 200 transactions (federal rule); a platform may still send one below that, and some states set lower limits.',
           'These thresholds decide who files a form, not whether the income is taxable: declare your income either way.',
+        ],
+      },
+      {
+        id: 'contractors',
+        title: 'Contractors and construction',
+        bullets: [
+          'In most states a contractor is the consumer of the materials it incorporates into real property: you pay sales tax to the supplier and do not add a separate sales tax line for those materials on the customer invoice.',
+          'Some states instead treat you as a reseller - Texas under a separated contract, Arizona and Nebraska in cases their rules define: materials are bought with a resale certificate and the customer is charged tax on the materials part. The contract form (lump-sum or separated) and the kind of work (capital improvement or repair) can change the answer.',
+          'Retainage: several states cap how much an owner may withhold and require the same percentage to flow down to subcontractors (California and New York now cap most private retainage at 5%, with statutory release deadlines). Check the law of the state where the project sits.',
+          'Retainage is not a discount: bill the work at its full price, keep the withheld amount as a receivable, and track when it becomes due instead of reducing the invoice.',
+          'Licensing, permits, mechanics-lien deadlines and preliminary notices are state-specific (sometimes county-specific): check the statutes of the state where the project sits and serve every notice within its deadline - on private work the lien is often the only security you have.',
+          'Payments to subcontractors: collect a W-9 before the first payment. A Form 1099-NEC is generally due for a non-employee paid 2,000 USD or more in the year; most corporations are exempt while attorneys are not, card and third-party network payments are reported by the processor on a Form 1099-K, and a missing taxpayer number can require backup withholding.',
         ],
       },
       {

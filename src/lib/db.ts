@@ -9,6 +9,7 @@ import { unlockedSnapshot, encryptRecord, sessionGuard, isUnlocked, readMeta, ca
 import { shareFile } from './share-file'
 import { Preferences } from '@capacitor/preferences'
 import { getPreferences, savePreferences, type DisplayPreferences } from './preferences'
+import { todayISO } from './subscriptions'
 
 export interface FatoratiBackup {
   version: string; exportedAt: number; preferences: DisplayPreferences
@@ -117,7 +118,7 @@ export async function downloadBackupFile(backup:FatoratiBackup,password=''):Prom
   if(!isUnlocked()) throw new Error('App locked')
   if(!password) throw new Error('A backup password is required while app lock is enabled')
   const guard=sessionGuard(),json=await encodeBackup(backup,password);guard()
-  await shareFile(`fatorati-backup-${new Date().toISOString().slice(0,10)}.fatorati`,json,'application/json')
+  await shareFile(`fatorati-backup-${todayISO()}.fatorati`,json,'application/json')
   await Preferences.set({key:LAST_BACKUP_KEY,value:String(Date.now())})
   window.dispatchEvent(new Event('fatorati:backup'))
 }

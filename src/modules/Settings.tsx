@@ -49,7 +49,6 @@ export default function Settings({ onNavigate }: { onNavigate?: (key: ModuleKey)
     rcNumber: business?.rcNumber || '',
     cnieNumber: business?.cnieNumber || '',
   })
-  const [imageTarget, setImageTarget] = useState<'logo' | 'stamp' | null>(null)
   // A logo imported before the resize existed can be up to the backup cap; it still shows.
   const logo = storedImage(business?.logo, MAX_LOGO_BYTES) || storedImage(business?.logo, MAX_BACKUP_IMAGE_BYTES)
   const stamp = storedImage(business?.stamp, MAX_STAMP_BYTES) || storedImage(business?.stamp, MAX_BACKUP_IMAGE_BYTES)
@@ -67,11 +66,12 @@ export default function Settings({ onNavigate }: { onNavigate?: (key: ModuleKey)
   const hints = hintsFor(region)
 
   useEffect(() => {
+    // The picked file carries the target, so this listener holds no state that the
+    // file dialog (which resolves long after the click) could outlive.
     const receive = () => {
-      const file = takePickedLogo()
-      const target = imageTarget
-      setImageTarget(null)
-      if (!file || !target) return
+      const picked = takePickedLogo()
+      if (!picked) return
+      const { file, target } = picked
       void (async () => {
         try {
           const dataUrl = await readImageFile(file, target === 'logo' ? MAX_LOGO_BYTES : MAX_STAMP_BYTES)
@@ -85,7 +85,7 @@ export default function Settings({ onNavigate }: { onNavigate?: (key: ModuleKey)
     }
     receive()
     return subscribePickedLogo(receive)
-  }, [imageTarget, updateBusiness])
+  }, [updateBusiness])
 
   /** Settings owns the document region; the assistant region follows it from here. */
   async function handleTaxRegionChange(next: TaxRegion) {
@@ -200,7 +200,7 @@ export default function Settings({ onNavigate }: { onNavigate?: (key: ModuleKey)
                 {logo
                   ? <img src={logo} alt={t('Logo')} className="h-16 w-16 rounded-lg border border-line object-cover" />
                   : <div className="grid h-16 w-16 place-items-center rounded-lg border border-dashed border-line-strong text-faint"><ImageIcon className="h-5 w-5" aria-hidden="true" /></div>}
-                <button type="button" onClick={() => { setImageTarget('logo'); chooseLogoFile() }} className="min-h-12 rounded-lg bg-brand-50 px-3.5 py-2 text-[13px] font-semibold text-brand-700 transition-all hover:bg-brand-100 active:scale-[0.98]">{t('Choose logo')}</button>
+                <button type="button" onClick={() => chooseLogoFile('logo')} className="min-h-12 rounded-lg bg-brand-50 px-3.5 py-2 text-[13px] font-semibold text-brand-700 transition-all hover:bg-brand-100 active:scale-[0.98]">{t('Choose logo')}</button>
                 {logo && <button type="button" onClick={() => void updateBusiness({ logo: undefined }).catch(error => void showAlert(errorText(error)))} className="min-h-12 rounded-lg bg-canvas px-3.5 py-2 text-[13px] text-serious">{t('Remove image')}</button>}
               </div>
               <p className="text-[11.5px] text-muted">{t('Max 200 KB after resizing. PNG or JPG.')}</p>
@@ -208,7 +208,7 @@ export default function Settings({ onNavigate }: { onNavigate?: (key: ModuleKey)
                 {stamp
                   ? <img src={stamp} alt={t('Stamp or signature')} className="h-16 w-16 rounded-lg border border-line object-contain" />
                   : <div className="grid h-16 w-16 place-items-center rounded-lg border border-dashed border-line-strong text-faint"><Stamp className="h-5 w-5" aria-hidden="true" /></div>}
-                <button type="button" onClick={() => { setImageTarget('stamp'); chooseLogoFile() }} className="min-h-12 rounded-lg bg-brand-50 px-3.5 py-2 text-[13px] font-semibold text-brand-700 transition-all hover:bg-brand-100 active:scale-[0.98]">{t('Choose stamp')}</button>
+                <button type="button" onClick={() => chooseLogoFile('stamp')} className="min-h-12 rounded-lg bg-brand-50 px-3.5 py-2 text-[13px] font-semibold text-brand-700 transition-all hover:bg-brand-100 active:scale-[0.98]">{t('Choose stamp')}</button>
                 {stamp && <button type="button" onClick={() => void updateBusiness({ stamp: undefined }).catch(error => void showAlert(errorText(error)))} className="min-h-12 rounded-lg bg-canvas px-3.5 py-2 text-[13px] text-serious">{t('Remove image')}</button>}
               </div>
               <p className="text-[11.5px] text-muted">{t('Stamp or signature')} · {t('Max 200 KB after resizing. PNG or JPG.')}</p>

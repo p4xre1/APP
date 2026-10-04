@@ -5,7 +5,8 @@ import { useFatorati } from '../store/useFatorati'
 import { money, number as formatNumber, documentTotals, lineTotal, formatDate } from '../lib/format'
 import { nextDocumentNumber, seriesFloor } from '../lib/fatorati'
 import { canConvertEstimate, invoiceFromEstimate } from '../lib/convert'
-import { clampDueDays } from '../lib/status'
+import { clampDueDays, dueDateFromTerms } from '../lib/status'
+import { todayISO } from '../lib/subscriptions'
 import { assistantRegion, assistantStartsOpen, assistantVisible, hintsFor, settingsRegion, TAX_REGION_LABEL } from '../lib/taxGuide'
 import { getPreferences } from '../lib/preferences'
 import { shareInvoicePdf } from '../lib/invoice-pdf'
@@ -125,8 +126,9 @@ export default function Estimates() {
       if (editing) await updateEstimate(editing.id, payload)
       else await addEstimate({
         ...payload, number: nextNumber, status: 'draft',
-        issueDate: new Date().toISOString().slice(0, 10),
-        expiryDate: new Date(Date.now() + clampDueDays(settings?.defaultDueDays) * 86400_000).toISOString().slice(0, 10),
+        // The device's local calendar day, like the lists and reminders that read it.
+        issueDate: todayISO(),
+        expiryDate: dueDateFromTerms(todayISO(), clampDueDays(settings?.defaultDueDays)),
       })
       setShowForm(false); setEditing(null)
     } catch (error) { await showAlert(errorText(error)) } finally { setBusy(false) }
@@ -157,10 +159,11 @@ export default function Estimates() {
     try {
       const invoicePrefix = settings?.invoicePrefix || 'INV'
       const number = nextDocumentNumber(invoices.map(row => row.number), invoicePrefix, 'INV', new Date(), seriesFloor(settings?.numberFloor, invoicePrefix, 'INV'))
+      const issueDate = todayISO()
       const invoice = await addInvoice(invoiceFromEstimate(
         estimate, number,
-        new Date().toISOString().slice(0, 10),
-        new Date(Date.now() + clampDueDays(settings?.defaultDueDays) * 86400_000).toISOString().slice(0, 10),
+        issueDate,
+        dueDateFromTerms(issueDate, clampDueDays(settings?.defaultDueDays)),
       ))
       await updateEstimate(estimate.id, { status: 'accepted', convertedInvoiceId: invoice.id })
       await showAlert(t('Draft invoice created'))

@@ -4,6 +4,7 @@ import { sessionGuard } from './vault'
 import { exportBackup } from './db'
 import type { FatoratiBackup } from './db'
 import { shareFile } from './share-file'
+import { todayISO } from './subscriptions'
 import { paymentsTotal, invoiceBalance } from './payments'
 
 export type CsvStore = 'customers' | 'invoices' | 'expenses'
@@ -44,5 +45,6 @@ export async function exportCsv(store: CsvStore, language: Language = getPrefere
   rows[0] = rows[0].map(header=>t(String(header),{},language))
   if(store==='invoices') rows.slice(1).forEach((row,index)=>{row[5]=t(backup.invoices[index].status,{},language)})
   guard()
-  await shareFile(`fatorati-${store}-${new Date().toISOString().slice(0, 10)}.csv`, buildCsv(rows), 'text/csv;charset=utf-8')
+  // The exported file is named after the device's local day, like every date in the app.
+  await shareFile(`fatorati-${store}-${todayISO()}.csv`, buildCsv(rows), 'text/csv;charset=utf-8')
 }

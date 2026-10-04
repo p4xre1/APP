@@ -12,7 +12,7 @@ import { formatDate, money } from './format'
 import { getPreferences, type Language } from './preferences'
 import { sessionGuard } from './vault'
 import { shareFile } from './share-file'
-import { minorToAmount, sortByNearest, subscriptionSummary, type SubscriptionSummary, type SubscriptionView, type SubscriptionStatus } from './subscriptions'
+import { minorToAmount, sortByNearest, subscriptionSummary, todayISO, type SubscriptionSummary, type SubscriptionView, type SubscriptionStatus } from './subscriptions'
 import type { Subscription } from '../store/types'
 
 export interface SubscriptionExportOptions {
@@ -121,7 +121,7 @@ export async function exportSubscriptionsXlsx(subscriptions: Subscription[], opt
   const fill = buildSubscriptionExport(subscriptions, options)
   const bytes = await subscriptionXlsxBytes(fill, language)
   guard()
-  await shareFile(`fatorati-subscriptions-${new Date().toISOString().slice(0, 10)}.xlsx`, bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  await shareFile(`fatorati-subscriptions-${todayISO()}.xlsx`, bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 }
 
 /** Rows of the PDF table, kept pure so the layout can be tested without a canvas. */
@@ -232,7 +232,7 @@ export async function exportSubscriptionsPdf(subscriptions: Subscription[], opti
     pdf.addImage(data, 'PNG', 0, 0, 297, 210, undefined, 'FAST')
   })
   guard()
-  await shareFile(`fatorati-subscriptions-${new Date().toISOString().slice(0, 10)}.pdf`, new Uint8Array(pdf.output('arraybuffer')) as Uint8Array<ArrayBuffer>, 'application/pdf')
+  await shareFile(`fatorati-subscriptions-${todayISO()}.pdf`, new Uint8Array(pdf.output('arraybuffer')) as Uint8Array<ArrayBuffer>, 'application/pdf')
 }
 
 /** Truncates a cell so a long note cannot overlap the next column. */

@@ -6,6 +6,7 @@ import { nextDocumentNumber, normalizePrefix } from '../src/lib/fatorati'
 import { reportTotals } from '../src/lib/reports'
 import { chartData } from '../src/lib/chart-data'
 import { exportBackup, importBackup, add, update, remove, getAll } from '../src/lib/db'
+import { normalizeRecord } from '../src/lib/backup-format'
 import { createOrChangePin, lockVault, isUnlocked, unlockedSnapshot } from '../src/lib/vault'
 import { fixture } from './fixtures'
 import type { Invoice } from '../src/store/types'
@@ -33,6 +34,35 @@ test('document totals add tax on top of a rounded subtotal, never on the raw flo
   assert.equal(totals.total, 0.55)
   assert.deepEqual(documentTotals([], 20, 'USD'), { subtotal: 0, tax: 0, total: 0 })
   assert.equal(roundMoney(totals.total, 'USD'), 0.55)
+})
+
+test('a line discount survives every write path and every backup round-trip', async () => {
+  // Regression: normalizeRecord() rebuilt each line as quantity × unit price and
+  // dropped item.discount, so saving or importing a discounted document rewrote the
+  // line to the undiscounted amount while subtotal/total kept the discount.
+  const line = { id: 'item-1', description: 'Casque audio', quantity: 3, unitPrice: 99.9, discount: 10 }
+  const totals = documentTotals([line], 0, 'USD')
+  // A complete invoice (the fixture row minus its ids), so exportBackup validates it.
+  const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...seed } = fixture().invoices[0]
+  const payload = {
+    ...seed, currency: 'USD', taxRate: 0, status: 'draft' as const, paidAt: undefined,
+    items: [{ ...line, total: lineTotal(line.quantity, line.unitPrice, 'USD', line.discount) }],
+    ...totals,
+  }
+  const saved = await add<Invoice>('invoices', payload as never)
+  assert.equal(saved.items[0].total, 269.73, 'the stored line matches the discounted form value')
+  assert.deepEqual([saved.subtotal, saved.tax, saved.total], [269.73, 0, 269.73])
+
+  // The stored row and the backup built from it keep the discounted line.
+  const stored = (await getAll<Invoice>('invoices'))[0]
+  assert.equal(stored.items[0].total, 269.73)
+  const backup = await exportBackup()
+  assert.equal(backup.invoices[0].items[0].total, 269.73)
+
+  // A record written by an older build (undiscounted total) is repaired on the next
+  // write or import, because the discount is part of the normalisation rule.
+  const legacy = normalizeRecord('invoices', { ...stored, items: [{ ...stored.items[0], total: 299.7 }] }, 'USD')
+  assert.equal((legacy.items as { total: number }[])[0].total, 269.73)
 })
 
 test('document numbers are sequential, prefix-normalized and never duplicate an existing number', () => {

@@ -31,7 +31,10 @@ type Status = Invoice['status']
 const STATUSES: Status[] = ['draft', 'sent', 'paid', 'overdue']
 
 function emptyForm(defaults: { currency: string; language: Invoice['language']; pdfColor: boolean; taxRate: number; template: DocumentTemplate; dueDays?: number }) {
-  const today = new Date().toISOString().slice(0, 10)
+  // The device's LOCAL calendar day, like every list, badge and reminder that reads
+  // these dates. The UTC day would date an evening invoice tomorrow west of UTC and
+  // yesterday east of it (and disagree with the local year in the number series).
+  const today = todayISO()
   return {
     currency: defaults.currency,
     language: defaults.language,
@@ -49,7 +52,7 @@ function emptyForm(defaults: { currency: string; language: Invoice['language']; 
     paymentMethod: '',
     template: defaults.template,
     issueDate: today,
-    dueDate: new Date(Date.now() + clampDueDays(defaults.dueDays) * 86400_000).toISOString().slice(0, 10),
+    dueDate: dueDateFromTerms(today, clampDueDays(defaults.dueDays)),
   }
 }
 
@@ -281,7 +284,7 @@ export default function Invoices() {
     try {
       const cnPrefix = settings?.creditNotePrefix || CREDIT_NOTE_FALLBACK_PREFIX
       const number = nextDocumentNumber(invoices.map(row => row.number), cnPrefix, CREDIT_NOTE_FALLBACK_PREFIX, new Date(), seriesFloor(settings?.numberFloor, cnPrefix, CREDIT_NOTE_FALLBACK_PREFIX))
-      await addInvoice(creditNoteFromInvoice(invoice, number, new Date().toISOString().slice(0, 10)))
+      await addInvoice(creditNoteFromInvoice(invoice, number, todayISO()))
       await showAlert(tr('Draft credit note created'))
     } catch (error) { await showAlert(errorText(error)) } finally { setBusy(false) }
   }

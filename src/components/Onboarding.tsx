@@ -49,7 +49,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   const canSubmit = businessName.trim() && ownerName.trim() && !submitting
 
   useEffect(() => {
-    const receive = () => { if (!isUnlocked()) return; const file=takePickedLogo(); if(file)handleLogoFile(file) }
+    const receive = () => { if (!isUnlocked()) return; const picked=takePickedLogo(); if(picked)handleLogoFile(picked.file) }
     receive(); return subscribePickedLogo(receive)
   }, [])
   function handleLogoFile(file: File) {
@@ -218,7 +218,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                 {logo && (
                   <img src={logo} alt={t("Logo")} className="w-16 h-16 rounded-lg object-cover border" />
                 )}
-                <button type="button" onClick={chooseLogoFile} className="px-3.5 py-2 rounded-lg text-[13px] font-semibold bg-brand-50 text-brand-700 hover:bg-brand-100 transition-all active:scale-[0.98] disabled:opacity-40 shadow-sm">{t('Choose logo')}</button>
+                <button type="button" onClick={() => chooseLogoFile('logo')} className="px-3.5 py-2 rounded-lg text-[13px] font-semibold bg-brand-50 text-brand-700 hover:bg-brand-100 transition-all active:scale-[0.98] disabled:opacity-40 shadow-sm">{t('Choose logo')}</button>
               </div>
               <p className="text-[12px] text-muted mt-1">{t('Max 200 KB after resizing. PNG or JPG.')}</p>
             </div>

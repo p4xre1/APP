@@ -84,11 +84,18 @@ MPL-covered file was modified, this project's own source remains under its own
 license; the plugin's files stay under MPL-2.0 and are not vendored into this
 repository.
 
+## Desktop runtime
+
+The desktop distribution includes Electron 44 (MIT), Chromium and Node.js, plus
+the runtime libraries listed above. Electron-generated packages include Electron's
+license and Chromium's third-party notices. `electron-builder` is an MIT-licensed
+build-time tool and is not part of the installed runtime.
+
 ## Development-only tools (not shipped in the APK)
 
 @capacitor/cli (MIT), @tailwindcss/vite and tailwindcss (MIT), @vitejs/plugin-react
 (MIT), vite (MIT), typescript (Apache-2.0), tsx (MIT), playwright (Apache-2.0),
-fake-indexeddb (Apache-2.0), @types/* (MIT).
+fake-indexeddb (Apache-2.0), @types/* (MIT), electron-builder (MIT).
 
 `write-excel-file` bundles `fflate` (MIT) to write the .xlsx container. No
 network access is involved in generating or opening an export.

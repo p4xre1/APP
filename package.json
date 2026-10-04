@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@10.34.3",
   "engines": {
-    "node": ">=20",
+    "node": ">=22.12",
     "pnpm": ">=10"
   },
   "scripts": {
@@ -18,7 +18,10 @@
     "cap:sync": "cap sync",
     "cap:open:android": "cap open android",
     "test": "tsx --test tests/*.test.ts",
-    "test:browser": "node tests/browser-check.mjs"
+    "test:browser": "node tests/browser-check.mjs",
+    "desktop:dev": "node scripts/desktop-dev.mjs",
+    "desktop:start": "pnpm build && electron .",
+    "desktop:dist": "pnpm build && electron-builder"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",
@@ -45,6 +48,8 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
     "fake-indexeddb": "^6.2.4",
     "playwright": "1.61.1",
     "tailwindcss": "^4.2.2",
@@ -55,6 +60,48 @@
   "pnpm": {
     "overrides": {
       "uuid@<11.1.1": "^11.1.1"
+    },
+    "onlyBuiltDependencies": [
+      "electron"
+    ]
+  },
+  "main": "electron/main.cjs",
+  "build": {
+    "appId": "com.fatorati.desktop",
+    "productName": "Fatorati",
+    "asar": true,
+    "directories": {
+      "output": "release",
+      "buildResources": "buildResources"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "electron/main.cjs"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.finance"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Office"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
     }
   }
 }

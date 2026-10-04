@@ -118,7 +118,8 @@ export async function downloadBackupFile(backup:FatoratiBackup,password=''):Prom
   if(!isUnlocked()) throw new Error('App locked')
   if(!password) throw new Error('A backup password is required while app lock is enabled')
   const guard=sessionGuard(),json=await encodeBackup(backup,password);guard()
-  await shareFile(`fatorati-backup-${todayISO()}.fatorati`,json,'application/json')
+  const saved = await shareFile(`fatorati-backup-${todayISO()}.fatorati`,json,'application/json')
+  if (!saved) return
   await Preferences.set({key:LAST_BACKUP_KEY,value:String(Date.now())})
   window.dispatchEvent(new Event('fatorati:backup'))
 }

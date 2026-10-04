@@ -27,8 +27,18 @@ async function discardStaged(path: string): Promise<void> {
 }
 
 /** Cache is FileProvider-accessible; never request external storage permissions. */
-export async function shareFile(filename: string, content: string | Uint8Array<ArrayBuffer>, mime: string): Promise<void> {
+export async function shareFile(filename: string, content: string | Uint8Array<ArrayBuffer>, mime: string): Promise<boolean> {
   const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_')
+  const desktop = typeof window === 'undefined' ? undefined : window.fatoratiDesktop
+  if (desktop?.isDesktop) {
+    try {
+      const bytes = typeof content === 'string' ? new TextEncoder().encode(content) : content
+      const result = await desktop.saveFile(safeName, bytes, mime)
+      return result.saved
+    } catch (error) {
+      throw exportWriteError(error)
+    }
+  }
   if (Capacitor.isNativePlatform()) {
     // Separate cache folders prevent one share from overwriting another app's pending attachment.
     const path = `exports/${crypto.randomUUID()}/${safeName}`
@@ -48,7 +58,7 @@ export async function shareFile(filename: string, content: string | Uint8Array<A
     }
     // Do not delete immediately: receiving apps may read the URI after this resolves.
     await Share.share({ url: uri })
-    return
+    return true
   }
   let anchor: HTMLAnchorElement | null = null
   let url: string | null = null
@@ -68,4 +78,5 @@ export async function shareFile(filename: string, content: string | Uint8Array<A
   // Give the browser time to consume the download before revoking its URL.
   const objectUrl = url
   setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000)
+  return true
 }
